@@ -2,7 +2,9 @@
 
 红山文化主题的**交互数字文创**作品：在浏览器里选一件红山玉器，跟着八道工序，把一块原石一步步「切」成器。
 
-在线试玩：https://yujian-jade-craft.app.workbuddy.host/?sharecode=K4KOEGFXJU
+在线试玩：**https://baiyu1770-sudo.github.io/yujian/**
+
+备用地址（部分校园网对 GitHub 有干扰时用）：https://yujian-jade-craft.app.workbuddy.host/?sharecode=K4KOEGFXJU
 
 ---
 
