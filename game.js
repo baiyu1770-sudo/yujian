@@ -25,7 +25,7 @@
   let dragging = false, captured = null, path = [], hover = null, preview = null, strokePhase = 0;
   let raf = 0, busy = false, demoFrame = 0, session = 0, toastTimer, flashTimer, resultTimer;
   let surface = null, surfaceKey = '', startedAt = Date.now(), finishedAt = 0, lastPreview = 0;
-  let chips = [], audioContext;
+  let chips = [], audioContext, emitAcc = 0, palette = null;
   let save = { records: {}, sound: false, lastLevel: 0 };
   try {
     const data = JSON.parse(localStorage.getItem(STORE));
@@ -55,6 +55,152 @@
         osc.connect(gain).connect(audioContext.destination); osc.start(now + i * .08); osc.stop(now + i * .08 + .6);
       });
     } catch (_) { /* Audio is optional. */ }
+  }
+  /* ————————————— 碎屑粒子 —————————————
+     磨皮与切片是两种完全不同的去除：磨是「把石皮搓成粉」，粉细、轻、贴着手往下簌簌落；
+     切是「把玉料锯开」，屑粗、重、沿锯口朝两侧迸开再砸下去。两套参数不共用。 */
+  const CHIP_CAP = 620, TAU = Math.PI * 2;
+  const rnd = (max = 1, min = 0) => min + Math.random() * (max - min);
+  const pick = list => list[(Math.random() * list.length) | 0];
+  function tint(hex, k, lift = 0) {
+    const n = parseInt(hex.slice(1), 16);
+    const v = [n >> 16 & 255, n >> 8 & 255, n & 255].map(x => Math.max(0, Math.min(255, Math.round(x * k + lift))));
+    return '#' + v.map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+  function buildPalette() {
+    const base = (game && game.level && game.level.color) || ['#eee0bb', '#ceb58d', '#97714e'];
+    palette = {
+      // 石皮：暖赭土色，磨下来是暗的、脏的
+      powder: ['#d3b78d', '#c2a478', '#ad8e60', '#96794c'],
+      grit: ['#9a7343', '#76532c', '#b08a55', '#5f4222'],
+      // 玉屑：偏亮、偏白，切下来是净的
+      mist: [tint(base[0], 1.02, 8), tint(base[0], 1.0, 2), '#efe8d4'],
+      flake: ['#f8f2e0', tint(base[0], 1.0, 0), '#ddd0b0', '#c8b992'],
+      shard: ['#a8906a', '#7d6647', tint(base[2], .92, 8)],
+      // 碎片的暗边：浅色玉面上的碎片要靠一点投影才立得住
+      flakeEdge: 'rgba(122,98,64,.34)',
+      shardEdge: 'rgba(84,64,40,.46)'
+    };
+  }
+  function push(p) {
+    if (reduced || chips.length >= CHIP_CAP) return;
+    p.start = performance.now(); chips.push(p);
+  }
+  // 石面判定：只有真的磨在石头上才掉屑。用原石的 alpha 轮廓做 3px 一格的遮罩。
+  let rawMask = null;
+  function buildRawMask() {
+    rawMask = null;
+    if (!rawImage) return;
+    try {
+      const data = rawImage.getContext('2d').getImageData(0, 0, 600, 600).data;
+      const grid = new Uint8Array(200 * 200);
+      for (let gy = 0; gy < 200; gy++) for (let gx = 0; gx < 200; gx++) {
+        grid[gy * 200 + gx] = data[((gy * 3 + 1) * 600 + gx * 3 + 1) * 4 + 3] > 40 ? 1 : 0;
+      }
+      rawMask = grid;
+    } catch (_) { rawMask = null; /* file:// 下 canvas 可能被污染，退化为不做判定 */ }
+  }
+  function onStone(p) {
+    if (!rawMask) return true;
+    const gx = Math.floor(p.x / 3), gy = Math.floor(p.y / 3);
+    return gx >= 0 && gy >= 0 && gx < 200 && gy < 200 && rawMask[gy * 200 + gx] === 1;
+  }
+  // —— 磨皮：石皮被搓成粉，粉细、轻、成片往下飘；砂粒更重，落得快
+  function emitGrind(at) {
+    if (!onStone(at)) return;
+    for (let i = 0, n = Math.random() < .5 ? 4 : 3; i < n; i++) {
+      const a = rnd(TAU), r = rnd(24, 3);
+      push({ kind: 'powder', x: at.x + Math.cos(a) * r, y: at.y + Math.sin(a) * r * .82,
+        vx: Math.cos(a) * rnd(54, 8), vy: Math.sin(a) * rnd(28, 2) + 14, g: 190,
+        size: rnd(5.2, 2.2), color: pick(palette.powder), life: rnd(980, 660), alpha: rnd(.62, .28) });
+    }
+    for (let i = 0, n = Math.random() < .55 ? 3 : 2; i < n; i++) {
+      const a = rnd(TAU), r = rnd(22, 3);
+      push({ kind: 'grain', x: at.x + Math.cos(a) * r, y: at.y + Math.sin(a) * r,
+        vx: Math.cos(a) * rnd(84, 16), vy: Math.sin(a) * rnd(38, 4) + 24, g: 540,
+        size: rnd(6, 2.6), color: pick(palette.grit), life: rnd(880, 620),
+        rot: rnd(TAU), spin: rnd(11, -11), alpha: rnd(1, .82) });
+    }
+    if (Math.random() < .25) {
+      const a = rnd(TAU);
+      push({ kind: 'flaw', x: at.x + Math.cos(a) * rnd(18, 3), y: at.y + Math.sin(a) * rnd(18, 3),
+        vx: Math.cos(a) * rnd(90, 20), vy: rnd(-26, -86), g: 760,
+        size: rnd(8.4, 4.6), color: pick(palette.grit), life: rnd(940, 700),
+        rot: rnd(TAU), spin: rnd(9, -9), alpha: 1 });
+    }
+    // 扬尘：一团很淡的土色雾气，慢慢往上飘散，是"磨"和"切"手感的分水岭
+    if (Math.random() < .12) {
+      push({ kind: 'haze', x: at.x + rnd(16, -16), y: at.y + rnd(12, -12),
+        vx: rnd(16, -16), vy: rnd(0, -18), g: -3,
+        size: rnd(32, 15), color: pick(palette.powder), life: rnd(1300, 900), alpha: rnd(.13, .06) });
+    }
+  }
+  // —— 切片：玉浆沿锯口喷出，碎片朝两侧迸开，砸得比石粉狠得多
+  function emitSlice(at) {
+    for (let i = 0, n = 3; i < n; i++) {
+      const side = Math.random() < .5 ? -1 : 1;
+      push({ kind: 'mist', x: at.x + rnd(10, -10), y: at.y + rnd(4, -4),
+        vx: rnd(32, -32), vy: side * rnd(118, 42), g: 420,
+        size: rnd(5.6, 2.2), color: pick(palette.mist), life: rnd(560, 360), alpha: rnd(.9, .55) });
+    }
+    for (let i = 0, n = Math.random() < .5 ? 3 : 2; i < n; i++) {
+      const drop = Math.random() < .8;
+      push({ kind: 'flake', edge: palette.flakeEdge, x: at.x + rnd(13, -13), y: at.y + rnd(3, -3),
+        vx: rnd(56, -56), vy: drop ? rnd(178, 60) : -rnd(110, 36), g: 1250,
+        size: rnd(6.6, 2.8), color: pick(palette.flake), life: rnd(700, 440),
+        rot: rnd(TAU), spin: rnd(24, -24), alpha: rnd(1, .82) });
+    }
+    if (Math.random() < .16) {
+      const drop = Math.random() < .82;
+      push({ kind: 'shard', edge: palette.shardEdge, x: at.x + rnd(9, -9), y: at.y + rnd(3, -3),
+        vx: rnd(70, -70), vy: drop ? rnd(206, 76) : -rnd(136, 46), g: 1700,
+        size: rnd(11.5, 7.4), color: pick(palette.shard), life: rnd(760, 520),
+        rot: rnd(TAU), spin: rnd(18, -18), alpha: 1 });
+    }
+  }
+  // 按手移动的路程发料：划过多少距离就落多少屑，快划出得多，慢划出得少
+  function emitMotion(phase, from, to) {
+    if (reduced || !palette) return;
+    emitAcc += E.distance(from, to);
+    const step = phase === 0 ? 3 : 3.6;
+    let guard = 0;
+    while (emitAcc >= step && guard++ < 24) {
+      emitAcc -= step;
+      const k = Math.random();
+      const at = { x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k };
+      if (phase === 0) emitGrind(at); else if (phase === 1) emitSlice(at);
+    }
+    emitAcc = Math.min(emitAcc, step);
+  }
+  function drawParticles(time) {
+    const alive = [];
+    for (let i = 0; i < chips.length; i++) {
+      const p = chips[i], age = time - (p.start || 0), u = Math.max(0, age / (p.life || 700));
+      if (u >= 1) continue;
+      alive.push(p);
+      const dt = age / 1000, x = p.x + p.vx * dt, y = p.y + p.vy * dt + .5 * p.g * dt * dt;
+      const alpha = Math.max(0, (p.alpha ?? 1) * (1 - u));
+      ctx.save(); ctx.fillStyle = p.color;
+      if (p.kind === 'haze') {
+        const s = p.size * (1 + u * 1.5);
+        ctx.globalAlpha = alpha * .5; ctx.beginPath(); ctx.arc(x, y, s, 0, TAU); ctx.fill();
+        ctx.globalAlpha = alpha * .34; ctx.beginPath(); ctx.arc(x, y, s * .56, 0, TAU); ctx.fill();
+      } else if (p.kind === 'powder' || p.kind === 'mist') {
+        const s = p.size * (1 + u * 1.15);
+        ctx.globalAlpha = alpha * .34; ctx.beginPath(); ctx.arc(x, y, s * 1.7, 0, TAU); ctx.fill();
+        ctx.globalAlpha = alpha * .92; ctx.beginPath(); ctx.arc(x, y, s, 0, TAU); ctx.fill();
+      } else {
+        // 沿飞行方向拉伸，飞得越快拉得越长，看起来才是在"掉"而不是"贴"
+        const vy = p.vy + p.g * dt, speed = Math.hypot(p.vx, vy);
+        ctx.globalAlpha = alpha;
+        ctx.translate(x, y); ctx.rotate(Math.atan2(vy, p.vx) * .7 + (p.rot + p.spin * dt) * .3);
+        const w = p.size * (1 + Math.min(1.15, speed / 240)), h = p.size * (1 - u * .22);
+        if (p.edge) { ctx.fillStyle = p.edge; ctx.fillRect(-w / 2 - .9, -h / 2 - .9, w + 1.8, h + 1.8); ctx.fillStyle = p.color; }
+        ctx.fillRect(-w / 2, -h / 2, w, h);
+      }
+      ctx.restore();
+    }
+    chips = alive;
   }
   function layer() { const c = document.createElement('canvas'); c.width = c.height = 600; return c; }
   function line(c, points, close = false) {
@@ -125,6 +271,7 @@
     if (active.procedural) { j.drawImage(materialTexture, 0, 0); j.save(); j.globalCompositeOperation = 'soft-light'; j.globalAlpha = .65; j.drawImage(rawImage, 0, 0); j.restore(); }
     else drawImage(j, 'jade', { left: d.x + b[0] * sx, top: d.y + b[1] * sy, right: d.x + b[2] * sx, bottom: d.y + b[3] * sy });
     j.globalCompositeOperation = 'destination-in'; j.drawImage(rawImage, 0, 0);
+    buildRawMask();
   }
   function boardImage(mask = null) {
     const out = layer(), c = out.getContext('2d');
@@ -298,6 +445,7 @@
     captured = null; busy = dragging = false; path = []; hover = preview = null; chips = [];
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     game = W.createWorkshop(index); hints = game.level.hints; surfaceKey = ''; startedAt = Date.now(); finishedAt = 0;
+    buildPalette(); emitAcc = 0;
     if (ready) { images.final = images[active.id + '-final']; prepareImages(); }
     $('stage-flash').classList.remove('show'); $('stage-flash').querySelector('span').textContent = ''; $('live-cut').textContent = '慢慢来，操作可以撤回'; $('live-cut').classList.remove('danger');
     save.lastLevel = index; persist(); drawArtifact($('target-canvas')); updateUI();
@@ -373,11 +521,7 @@
       const p = strokePhase === 3 || strokePhase === 1 ? [path[0], path[path.length - 1]] : path;
       ctx.save(); ctx.strokeStyle = preview?.safe === false ? '#ac5642' : '#e6c575'; ctx.lineCap = ctx.lineJoin = 'round'; ctx.lineWidth = 2 / Math.max(1, camera.zoom / 1.5); line(ctx, p); ctx.stroke(); ctx.restore();
     }
-    chips = chips.filter(p => time - p.start < 700);
-    for (const p of chips) {
-      const t = (time - p.start) / 700; ctx.save(); ctx.globalAlpha = 1 - t; ctx.fillStyle = p.color;
-      ctx.fillRect(p.x + p.dx * t, p.y + p.dy * t + t * t * 55, p.size, p.size); ctx.restore();
-    }
+    drawParticles(time);
     if (hover && game.state.status === 'playing') {
       ctx.save(); const brushing = [0, 6, 7].includes(game.state.phase);
       ctx.strokeStyle = brushing ? '#fcf3d9cf' : '#f5e4accc'; ctx.lineWidth = 1 / camera.zoom;
@@ -394,9 +538,22 @@
     if (result.kind === 'ignored') { updateUI(); return; }
     if (result.kind === 'invalid') { toast(result.reason); updateUI(); return; }
     surfaceKey = '';
-    if (result.removed?.length && !reduced) for (let n = 0; n < 35; n++) {
-      const p = E.position(result.removed[Math.floor(Math.random() * result.removed.length)]);
-      chips.push({ ...p, dx: (Math.random() - .5) * 70, dy: -15 - Math.random() * 30, size: 1 + Math.random() * 3, color: game.level.color[n % 3], start: performance.now() });
+    if (!reduced) {
+      if (result.removed?.length) for (let n = 0; n < 32; n++) {
+        const p = E.position(result.removed[(Math.random() * result.removed.length) | 0]);
+        push({ kind: 'crumb', x: p.x, y: p.y, vx: rnd(86, -86), vy: rnd(24, -74), g: 330,
+          size: rnd(4.6, 1.7), color: game.level.color[n % 3], life: rnd(740, 470),
+          rot: rnd(TAU), spin: rnd(13, -13), alpha: .92 });
+      }
+      // 切下那一瞬：沿整条锯口补一发，屑成串从切口落下
+      if (oldPhase === 1 && result.kind === 'sliced') {
+        const g = game.guide();
+        for (let n = 0; n < 22; n++) { const k = Math.random(); emitSlice({ x: g[0].x + (g[1].x - g[0].x) * k, y: g[0].y + (g[1].y - g[0].y) * k }); }
+      }
+      // 磨完最后一把：残留的粉顺着原石边缘再飘一层
+      if (oldPhase === 0 && result.kind === 'advance' && A.raw?.points) {
+        for (let n = 0; n < 14; n++) emitGrind(A.raw.points[(Math.random() * A.raw.points.length) | 0]);
+      }
     }
     $('live-cut').classList.remove('danger');
     $('live-cut').textContent = result.kind === 'failed' ? '玉料已报废 · 可以撤回' : result.kind === 'complete' ? '温润成器 · 已收入图鉴' : result.kind === 'paint' ? '这一笔已留下 · 可以撤回' : '这一笔已完成 · 可以撤回';
@@ -438,6 +595,7 @@
     const p = point(event); hover = p;
     if (dragging && event.pointerId === captured && E.distance(path[path.length - 1], p) > 1) {
       const previous = path[path.length - 1]; path.push(p);
+      emitMotion(strokePhase, previous, p);
       if ([0, 2, 4, 6, 7].includes(strokePhase)) { game.paint([previous, p]); updateUI(); }
       else if (performance.now() - lastPreview > 60) { lastPreview = performance.now(); updatePreview(); }
     }
@@ -462,11 +620,12 @@
     busy = dragging = true; strokePhase = phase; path = [guide[0]]; game.begin();
     canvas.scrollIntoView({ block: 'center', behavior: 'instant' }); updateUI();
     const start = performance.now(), duration = reduced ? 1 : brush && phase !== 2 && phase !== 4 ? 1800 : Math.min(1700, Math.max(650, guide.length * 9));
-    let painted = 0;
+    let painted = 0, emitted = 0;
     function tick(time) {
       if (token !== session) return;
       const t = Math.min(1, (time - start) / duration), n = Math.max(1, Math.ceil(guide.length * t));
       path = guide.slice(0, n); hover = path[path.length - 1];
+      if (n > emitted) { if (emitted > 0) emitMotion(phase, guide[emitted - 1], guide[n - 1]); emitted = n; }
       if (brush && n > painted) { game.paint(guide.slice(Math.max(0, painted - 1), n)); painted = n; updateUI(); }
       else if (time - lastPreview > 80) { lastPreview = time; updatePreview(); }
       schedule();
@@ -484,7 +643,7 @@
     if (!game.undo()) { toast('还没有可以撤回的操作。'); return; }
     session++; clearTimeout(resultTimer); clearTimeout(flashTimer); $('stage-flash').classList.remove('show');
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
-    surfaceKey = ''; chips = []; hover = null; $('live-cut').textContent = '已回到上一次操作之前'; $('live-cut').classList.remove('danger'); updateUI();
+    surfaceKey = ''; chips = []; emitAcc = 0; hover = null; $('live-cut').textContent = '已回到上一次操作之前'; $('live-cut').classList.remove('danger'); updateUI();
     canvas.scrollIntoView({ block: 'center', behavior: 'instant' }); toast('已撤回上一步，可以继续。');
   }
   function stars() { return game.state.assist > 2 ? 1 : game.state.assist > 0 || game.cutter.state.totalCuts > 4 + E.OPENINGS.length + E.DETAILS.length ? 2 : 3; }
