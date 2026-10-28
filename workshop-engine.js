@@ -213,7 +213,14 @@
       pending.assisted = !!options.assisted; commit(); return result;
     }
     function guide() {
-      if (state.phase === 0) return scan({ left: 55, right: 485, top: 65, bottom: 490 });
+      if (state.phase === 0) {
+        /* 示范要盖住整块石料：范围取自磨点本身，石料放大后不会剩下一圈擦不到 */
+        const pts = A.raw.points || [];
+        let l = 1e9, t = 1e9, r = -1e9, b = -1e9;
+        for (const q of pts) { if (q.x < l) l = q.x; if (q.x > r) r = q.x; if (q.y < t) t = q.y; if (q.y > b) b = q.y; }
+        if (!pts.length) return scan({ left: 55, right: 485, top: 65, bottom: 490 });
+        return scan({ left: l + 4, right: r - 4, top: t + 4, bottom: b - 4 }, 26);
+      }
       if (state.phase === 1) { const e = nextEdge(); return [e.a, e.b]; }
       if (state.phase === 2) return OUTLINE;
       if (state.phase === 4) return SKETCHES[state.sketchIndex].points;

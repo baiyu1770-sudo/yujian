@@ -1,6 +1,17 @@
 (function () {
   'use strict';
   const BaseE = window.JadeEngine, BaseW = window.JadeWorkshop, A = window.JadeStages;
+  /* 石料按设计稿放大：板框尺寸由器形决定、不能改，而设计稿要求四条切线都落在石体内部，
+     所以反过来把石体放大到板框外面（等比、以板框中心为心），磨点同步换算。 */
+  (function fitStone() {
+    const raw = A.raw, K = 1.33, cx = 270, cy = 275;
+    if (!raw || raw.__fit) return;
+    const sx = v => cx + (v - cx) * K, sy = v => cy + (v - cy) * K;
+    raw.draw = { x: sx(raw.draw.x), y: sy(raw.draw.y), width: raw.draw.width * K, height: raw.draw.height * K };
+    if (raw.material) raw.material = { left: sx(raw.material.left), top: sy(raw.material.top), right: sx(raw.material.right), bottom: sy(raw.material.bottom) };
+    raw.points = raw.points.map(p => ({ x: sx(p.x), y: sy(p.y) })).filter(p => p.x > 0 && p.y > 0 && p.x < 600 && p.y < 600);
+    raw.__fit = K;
+  })();
   let E = BaseE, W = BaseW;
   const catalogue = [{ id: 'dragon', name: '卷身玉器', material: '米白褐斑玉质', model: window.JadeArtwork, procedural: false }, ...(window.JadeCatalogue || [])];
   let active = catalogue[0];
@@ -479,6 +490,19 @@
     for (let i = 1; i < points.length; i++) if (set.has(i - 1) && set.has(i)) { line(ctx, [points[i - 1], points[i]]); ctx.stroke(); }
     ctx.restore();
   }
+  /* 切片框线：已切＝红实线，未切＝红虚线，下垫米白细线保证在石皮与玉面上都看得清 */
+  function plateEdge(e, cut, active) {
+    const u = 1 / Math.max(1, view().zoom / 1.4);
+    const draw = (width, dash, color) => {
+      ctx.setLineDash(dash.map(d => d * u)); ctx.lineWidth = width * u; ctx.strokeStyle = color;
+      line(ctx, [e.a, e.b]); ctx.stroke();
+    };
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    draw(cut ? 4.6 : 5.2, [], '#fdf6e8c9');
+    draw(cut ? 2.6 : 2.2, cut ? [] : [7, 5], cut ? '#a8322a' : '#e04b3f');
+    if (active) draw(0.9, [], '#f7b3a6');
+    ctx.restore();
+  }
   function guideLine(points, active = false) {
     ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.setLineDash(active ? [4, 5] : [3, 6]);
     ctx.strokeStyle = active ? '#497063d9' : '#71654471'; ctx.lineWidth = (active ? 1.5 : 1) / Math.max(1, view().zoom / 1.4);
@@ -493,11 +517,7 @@
     if (s.status === 'complete') return;
     if (s.phase === 1 && !s.sliced) {
       const next = game.nextEdge();
-      for (const e of game.plateEdges()) {
-        if (e.cut) {
-          ctx.save(); ctx.strokeStyle = '#6d5030d9'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; line(ctx, [e.a, e.b]); ctx.stroke(); ctx.restore();
-        } else guideLine([e.a, e.b], hints && e.i === next.i);
-      }
+      for (const e of game.plateEdges()) plateEdge(e, e.cut, hints && !e.cut && e.i === next.i);
       return;
     }
     if (s.phase === 2) { if (hints) guideLine(W.OUTLINE, true); ink(game.outlinePoints, s.outline); }
