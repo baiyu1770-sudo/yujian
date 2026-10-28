@@ -12,7 +12,7 @@
   const words = ['一', '二', '三', '四', '五', '六', '七', '八'];
   const specs = [
     { label: '磨皮 / REVEAL', title: '先见玉质，再想玉形', text: '按住来回拖动，磨掉整块原石的石皮。擦过的地方会露出米白褐斑的玉质，不用开窗或打光。', message: '来回磨去石皮，让玉质慢慢露出来', progress: '石皮磨除', gesture: '按住擦拭 / 松手完成这一笔', tool: '磨皮石', icon: 'spark', assist: '示范磨皮', art: 'raw' },
-    { label: '切板 / SLICE', title: '一片素玉，留足余量', text: '沿横向引线切下一片。再调整玉板的长、宽、厚度，留够容纳图样的余量，取出玉板。', message: '沿横线，从一侧划到另一侧', progress: '切片完成', gesture: '沿线横切 / 调整尺寸后取板', tool: '切片锯', icon: 'cut', assist: '示范切片', art: 'slab' },
+    { label: '切板 / SLICE', title: '四边各一刀，板才落得下来', text: '沿虚线把这块不规整的料切成长方形：上、右、下、左四条边各切一刀，顺序随意。四刀切完，玉板就分离出来，再调长宽厚。', message: '沿虚线四条边各切一刀', progress: '四边切割', gesture: '从红点按住 / 划到另一端', tool: '切片锯', icon: 'cut', assist: '示范这一刀', art: 'slab' },
     { label: '描形 / OUTLINE', title: '先描外形，不急着下刀', text: '沿淡色虚线描出器物的大轮廓。可以分几笔完成；这一道只落墨，不开孔、不雕眼纹。', message: '沿虚线描轮廓，可以分几笔慢慢完成', progress: '外轮廓描绘', gesture: '沿线描绘 / 可以分笔', tool: '描形笔', icon: 'line', assist: '示范描形', art: 'draft' },
     { label: '粗切 / ROUGH CUT', title: '先去余料，留下毛胚', text: '用直线切去四角余料，保住已经描好的轮廓。四角去尽后自动衔接边缘修整，形成没有纹样的粗胚。', message: '松手才落刀，注意保留轮廓内的玉料', progress: '四角余料去除', gesture: '划线看预览 / 松手落刀', tool: '切玉刀', icon: 'cut', assist: '示范一刀', art: 'rough' },
     { label: '画细节 / DRAW DETAILS', title: '孔位与纹样，先画清楚', text: '依次描出大孔、小孔、嘴部、眼纹、吻线和卷纹。细处会自动放大；现在只描墨线，玉料还没有被切开。', message: '先画细节，画完才开始雕琢', progress: '细节草线完成', gesture: '沿线描绘 / 可以分笔', tool: '细描笔', icon: 'line', assist: '示范这一笔', art: 'rough' },
@@ -357,7 +357,8 @@
   }
   function currentSpec() {
     const s = game.state, cs = game.cutter.state, spec = { ...specs[s.phase] };
-    if (s.phase === 1 && s.sliced) { spec.title = '玉板已切出，定下比例'; spec.message = '调整长宽厚度，再点击“取出玉板”'; }
+    if (s.phase === 1 && s.sliced) { spec.title = '玉板已切出，定下比例'; spec.message = '调整长宽厚度，再点击“取出玉板”'; spec.gesture = '拖动滑杆定尺寸 / 再取出玉板'; }
+    else if (s.phase === 1 && s.cuts.length) spec.message = `已切 ${s.cuts.length} / 4 刀 · 继续下一条虚线`;
     if (s.phase === 4) {
       spec.title = ['描中央大孔', '描侧面小孔', '描嘴部缺口', '描眼纹', '描吻线', '描卷纹'][s.sketchIndex];
       spec.message = `细节草线 ${s.sketchIndex + 1} / 6 · 只落墨，暂不切开`;
@@ -431,13 +432,13 @@
     $('tool-hint').textContent = cutting ? '松手落刀 · 可以撤回' : '不设时限，慢慢完成';
     canvas.classList.toggle('polishing', [0, 6, 7].includes(s.phase));
     const zoom = view().zoom; $('view-tag').hidden = zoom <= 1.2; $('view-tag').textContent = '局部放大 ×' + zoom.toFixed(1);
-    $('plate-controls').hidden = s.phase !== 1;
+    $('plate-controls').hidden = s.phase !== 1 || !s.sliced;
     for (const [key, id] of [['length', 'plate-length'], ['width', 'plate-width'], ['thickness', 'plate-thickness']]) {
       if (key !== 'thickness') { $(id).min = game.plateBase[key]; $(id).max = game.plateBase[key] + (key === 'length' ? 18 : 14); }
       $(id).value = s.dimensions[key]; $(key + '-output').textContent = s.dimensions[key]; $(id).disabled = busy || dragging;
     }
     $('plate-size').textContent = `${s.dimensions.length} × ${s.dimensions.width} × ${s.dimensions.thickness}`;
-    $('confirm-plate').disabled = !s.sliced || busy || s.status !== 'playing'; $('confirm-plate').textContent = s.sliced ? '取出玉板，开始描形 →' : '先沿横线切下一片';
+    $('confirm-plate').disabled = !s.sliced || busy || s.status !== 'playing'; $('confirm-plate').textContent = s.sliced ? '取出玉板，开始描形 →' : `先切完四条边（${s.cuts.length}/4）`;
     $('target-final').classList.toggle('selected', !referencePhase); $('target-phase').classList.toggle('selected', referencePhase);
     $('target-final').setAttribute('aria-pressed', String(!referencePhase)); $('target-phase').setAttribute('aria-pressed', String(referencePhase));
     $('target-canvas').hidden = referencePhase && !active.procedural; $('phase-art').hidden = !referencePhase || active.procedural;
@@ -447,6 +448,8 @@
     $('target-caption').textContent = referencePhase ? W.PHASES[s.phase] + (active.procedural ? ' · 当前制作状态' : ' · 工序效果参考') : '成品参考 · 操作区从原石开始';
     if (!referencePhase) drawArtifact($('target-canvas'));
     $('sound-button').setAttribute('aria-pressed', String(!!save.sound)); $('sound-button').querySelector('span').textContent = `玉石音效 · ${save.sound ? '开' : '关'}`;
+    if (s.phase !== tipPhase) { tipPhase = s.phase; cueAnchor = null; hideStepTip(false); setTimeout(() => showStepTip(false), 140); }
+    placeCue();
     schedule();
   }
   function startLevel(index) {
@@ -454,7 +457,7 @@
     if (captured !== null && canvas.hasPointerCapture(captured)) canvas.releasePointerCapture(captured);
     captured = null; busy = dragging = false; path = []; hover = preview = null; chips = [];
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
-    game = W.createWorkshop(index); hints = game.level.hints; surfaceKey = ''; startedAt = Date.now(); finishedAt = 0;
+    game = W.createWorkshop(index); hints = game.level.hints; surfaceKey = ''; startedAt = Date.now(); finishedAt = 0; cueAnchor = null;
     buildPalette(); emitAcc = 0;
     if (ready) { images.final = images[active.id + '-final']; prepareImages(); }
     $('stage-flash').classList.remove('show'); $('stage-flash').querySelector('span').textContent = ''; $('live-cut').textContent = '慢慢来，操作可以撤回'; $('live-cut').classList.remove('danger');
@@ -488,8 +491,16 @@
   function drawGuides() {
     const s = game.state, cs = game.cutter.state;
     if (s.status === 'complete') return;
-    if (s.phase === 1 && !s.sliced) { guideLine(game.guide(), true); return; }
-    if (s.phase === 2) { if (hints) guideLine(W.OUTLINE, false); ink(game.outlinePoints, s.outline); }
+    if (s.phase === 1 && !s.sliced) {
+      const next = game.nextEdge();
+      for (const e of game.plateEdges()) {
+        if (e.cut) {
+          ctx.save(); ctx.strokeStyle = '#6d5030d9'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; line(ctx, [e.a, e.b]); ctx.stroke(); ctx.restore();
+        } else guideLine([e.a, e.b], hints && e.i === next.i);
+      }
+      return;
+    }
+    if (s.phase === 2) { if (hints) guideLine(W.OUTLINE, true); ink(game.outlinePoints, s.outline); }
     if (s.phase === 3) {
       ctx.save(); ctx.strokeStyle = '#785236b0'; ctx.lineWidth = 1.5; line(ctx, W.OUTLINE); ctx.stroke(); ctx.restore();
       if (hints) for (const g of E.GUIDES) if ((game.preview(g).removed?.length || 0) > 20) guideLine(g, true);
@@ -566,7 +577,7 @@
       }
     }
     $('live-cut').classList.remove('danger');
-    $('live-cut').textContent = result.kind === 'failed' ? '玉料已报废 · 可以撤回' : result.kind === 'complete' ? '温润成器 · 已收入图鉴' : result.kind === 'paint' ? '这一笔已留下 · 可以撤回' : '这一笔已完成 · 可以撤回';
+    $('live-cut').textContent = result.kind === 'failed' ? '玉料已报废 · 可以撤回' : result.kind === 'complete' ? '温润成器 · 已收入图鉴' : result.kind === 'cut' ? (result.cuts ? `${result.name}已切 · ${result.cuts} / 4 刀` : '这一刀已落下 · 可以撤回') : result.kind === 'paint' ? '这一笔已留下 · 可以撤回' : '这一笔已完成 · 可以撤回';
     if (result.kind === 'failed' || result.kind === 'complete') {
       sound(result.kind); finishedAt = Date.now();
       if (result.kind === 'complete') saveCompletion();
@@ -600,7 +611,7 @@
   }
   canvas.addEventListener('pointerdown', event => {
     if (!ready || busy || dragging || game.state.status !== 'playing' || event.button !== 0) return;
-    event.preventDefault(); canvas.focus({ preventScroll: true }); dragging = true; captured = event.pointerId; canvas.setPointerCapture(captured);
+    event.preventDefault(); canvas.focus({ preventScroll: true }); hideStepTip(); dragging = true; captured = event.pointerId; canvas.setPointerCapture(captured);
     strokePhase = game.state.phase; path = [point(event)]; hover = path[0]; preview = null;
     game.begin(); if ([0, 2, 4, 6, 7].includes(strokePhase)) game.paint(path); updateUI();
   });
@@ -628,6 +639,7 @@
   canvas.addEventListener('pointerleave', () => { if (!dragging) { hover = null; schedule(); } });
   function demonstrate() {
     if (busy || dragging || !ready || game.state.status !== 'playing') return;
+    hideStepTip();
     const phase = game.state.phase, token = session, guide = E.resample(game.guide(), 5);
     const brush = [0, 2, 4, 6, 7].includes(phase);
     busy = dragging = true; strokePhase = phase; path = [guide[0]]; game.begin();
@@ -713,6 +725,83 @@
     $('mg-main').setAttribute('aria-expanded', String(mgOpen));
     $('mg-detail').hidden = !mgOpen;
   }
+  /* ————————————— 每步起手引导 —————————————
+     ① 画布上的起点脉冲 + 方向箭头，回答「从哪个位置按下、往哪个方向滑」；
+     ② 每步第一次进入时弹三行说明卡，回答「从哪起、怎么走、怎样算完成」。 */
+  const TIP_KEY = 'yujian-steptips-v1';
+  let tipsSeen = [], tipTimer = 0, tipPhase = -1, coachPending = false, cueAnchor = null;
+  try { const raw = JSON.parse(localStorage.getItem(TIP_KEY) || '[]'); if (Array.isArray(raw)) tipsSeen = raw.filter(n => Number.isInteger(n)); } catch (_) { /* 隐私模式下不记忆 */ }
+  const tipText = [
+    ['在玉料任意位置按住', '横向来回拖动，像擦桌子一样', '石皮褪到 97%，自动进入切板'],
+    ['从红点按住', '沿虚线划到另一端再松手，一刀只切一条边', '上、右、下、左共 4 刀，切完才能取板'],
+    ['从红点起笔', '沿虚线描一整圈，中途松手也没关系', '描到 94%，自动进入粗切'],
+    ['从红点起笔', '朝亮起的方向直线划过，一刀切掉这块余料', '四角都去净，自动进入画细节'],
+    ['从红点起笔', '一笔描一段墨线，细处会自动放大', '六个部位都描完，才轮到下刀'],
+    ['沿已经画好的墨线', '从一端划到另一端，开孔要画闭合圈', '松手才落刀，画错的可以撤回'],
+    ['从红点按住', '打圈擦过整面，边角和刀痕也要带到', '覆盖满，自动进入抛光'],
+    ['从红点按住', '整面来回拂拭，不要停在一点', '覆盖满即成器，自动收入图鉴']
+  ];
+  function markTipSeen(i) {
+    if (tipsSeen.includes(i)) return;
+    tipsSeen.push(i);
+    try { localStorage.setItem(TIP_KEY, JSON.stringify(tipsSeen)); } catch (_) { /* 隐私模式下不记忆 */ }
+  }
+  function fillTip() {
+    const i = game.state.phase, t = tipText[i] || tipText[0];
+    $('tip-kicker').textContent = `第${words[i]}步 · ${W.PHASES[i]}`;
+    $('tip-start').textContent = t[0];
+    $('tip-move').textContent = t[1];
+    $('tip-done').textContent = i === 4 ? t[2].replace('六个部位', `${W.SKETCHES.length} 个部位`) : t[2];
+  }
+  function hideStepTip(mark = true) {
+    if ($('step-tip').hidden) return;
+    $('step-tip').hidden = true; $('tip-help').setAttribute('aria-expanded', 'false');
+    clearTimeout(tipTimer);
+    if (mark && game) markTipSeen(game.state.phase);
+    placeCue();
+  }
+  function showStepTip(force) {
+    if (!ready || !game || game.state.status !== 'playing') return;
+    if (document.body.dataset.view !== 'workshop') return;
+    if (coachPending || !$('coach').hidden) return;
+    if (!force && tipsSeen.includes(game.state.phase)) return;
+    fillTip();
+    $('step-tip').hidden = false; $('tip-help').setAttribute('aria-expanded', 'true');
+    placeCue();
+    clearTimeout(tipTimer); tipTimer = setTimeout(() => hideStepTip(), 16000);
+  }
+  /* 起点脉冲：位置与方向都由当前工序的引导线推出来，八道工序共用一套 */
+  function placeCue() {
+    const el = $('start-cue'); if (!el) return;
+    const s = game && game.state;
+    if (!ready || !hints || !s || s.status !== 'playing' || dragging || busy || !$('step-tip').hidden) { el.hidden = true; return; }
+    if (game.progress() > .015) { el.hidden = true; return; }
+    const g = game.guide(); if (!g || g.length < 2) { el.hidden = true; return; }
+    const p0 = g[0]; let far = null, farD = 0;
+    /* 取「沿引导线走一段」的方向，而不是取最远的点，避免箭头斜飘 */
+    for (let i = 1; i < Math.min(9, g.length); i++) {
+      const d = Math.hypot(g[i].x - p0.x, g[i].y - p0.y);
+      if (d >= 24) { far = g[i]; farD = d; break; }
+    }
+    if (!far) { const last = g[Math.min(8, g.length - 1)]; far = last; farD = Math.hypot(last.x - p0.x, last.y - p0.y); }
+    if (!far || farD < 6) { el.hidden = true; return; }
+    /* 磨皮这一步整块料都能擦，把起手点吸附到玉料本体上，别浮在空画布上 */
+    let anchor = p0;
+    const surface = s.phase === 0 ? A.raw?.points : s.phase >= 6 ? game.brushPoints : null;
+    if (surface?.length) {
+      if (!cueAnchor) {
+        let best = null, score = Infinity;
+        for (const p of surface) { const v = p.x + p.y; if (v < score) { score = v; best = p; } }
+        cueAnchor = best || p0;
+      }
+      anchor = cueAnchor;
+    }
+    const v = view(), sx = (anchor.x - v.x) * v.zoom + 300, sy = (anchor.y - v.y) * v.zoom + 300;
+    if (sx < 24 || sx > 576 || sy < 24 || sy > 576) { el.hidden = true; return; }
+    el.hidden = false;
+    el.style.left = (sx / 6).toFixed(2) + '%'; el.style.top = (sy / 6).toFixed(2) + '%';
+    el.style.setProperty('--cue-angle', (Math.atan2(far.y - p0.y, far.x - p0.x) * 180 / Math.PI).toFixed(1) + 'deg');
+  }
   /* ————————————— 首次进入的三步气泡 —————————————
      只在移动端出现，只在工坊页出现；看过一次就不再打扰。 */
   const COACH_KEY = 'yujian-coach-v1';
@@ -761,14 +850,16 @@
     requestAnimationFrame(() => { placeCoach(); $('coach-bubble').style.visibility = 'visible'; $('coach-bubble').querySelector('[data-coach="next"]').focus({ preventScroll: true }); });
   }
   function finishCoach() {
-    $('coach').hidden = true; coachSeen = true;
+    $('coach').hidden = true; coachSeen = true; coachPending = false;
     if (document.body.dataset.view === 'workshop') scrollUnderBar(canvas.closest('.workbench'));
+    setTimeout(() => showStepTip(true), 260);
     try { localStorage.setItem(COACH_KEY, '1'); } catch (_) { /* 隐私模式下不记忆 */ }
   }
   function maybeCoach() {
     if (coachSeen || !ready) return;
     if (!matchMedia('(max-width: 950px)').matches) return;
-    setTimeout(() => { if (!coachSeen && document.body.dataset.view === 'workshop') showCoach(0); }, 520);
+    coachPending = true;
+    setTimeout(() => { if (!coachSeen && document.body.dataset.view === 'workshop') showCoach(0); else coachPending = false; }, 520);
   }
   function openArtifacts() {
     $('artifact-list').replaceChildren();
@@ -795,7 +886,9 @@
     $('home-button').removeAttribute('aria-current'); $('choose-artifact-button').setAttribute('aria-current', 'page');
     if (matchMedia('(max-width: 950px)').matches) requestAnimationFrame(() => scrollUnderBar(canvas.closest('.workbench')));
     else window.scrollTo({ top: 0, behavior: 'instant' });
-    canvas.focus({ preventScroll: true }); schedule(); maybeCoach();
+    canvas.focus({ preventScroll: true }); schedule();
+    tipPhase = game.state.phase; setTimeout(() => showStepTip(false), 320);
+    maybeCoach();
   }
   function fillHomeArtifacts() {
     const notes = ['观卷曲与留白', '观甲壳与对称', '观双目与羽纹', '观横纹与弧面', '观鱼形与穿孔'];
@@ -817,7 +910,7 @@
   $('start-journey').addEventListener('click', () => { $('forms-title').focus({ preventScroll: true }); $('forms').scrollIntoView({ block: 'start', behavior: reduced ? 'instant' : 'smooth' }); });
   for (const id of ['culture-button', 'culture-more']) $(id).addEventListener('click', () => $('culture-dialog').showModal());
   W.PHASES.forEach((name, i) => {
-    const descriptions = ['不规整原石，磨去石皮', '定下长宽厚，取出素板', '只有外形，没有纹样', '去掉余料，留下毛胚', '孔位纹样，先落墨线', '沿线下刀，半雕渐成', '细磨刀痕，修整玉面', '拂去浮尘，温润成器'];
+    const descriptions = ['不规整原石，磨去石皮', '四边各切一刀，取出素板', '只有外形，没有纹样', '去掉余料，留下毛胚', '孔位纹样，先落墨线', '沿线下刀，半雕渐成', '细磨刀痕，修整玉面', '拂去浮尘，温润成器'];
     const li = document.createElement('li'); li.className = 'step'; li.dataset.step = i;
     li.innerHTML = `<span class="step-index">${String(i + 1).padStart(2, '0')}</span><div><h2>${name}</h2><p>${descriptions[i]}</p></div><span class="step-state"></span>`; $('step-list').append(li);
   });
@@ -846,6 +939,10 @@
   buildRail();
   let mgKeep = 0;
   $('mg-main').addEventListener('pointerdown', () => { mgKeep = window.scrollY; });
+  $('tip-ok').addEventListener('click', () => hideStepTip());
+  $('tip-close').addEventListener('click', () => hideStepTip());
+  $('tip-demo').addEventListener('click', () => { hideStepTip(); demonstrate(); });
+  $('tip-help').addEventListener('click', () => { if ($('step-tip').hidden) showStepTip(true); else hideStepTip(); });
   $('mg-main').addEventListener('click', () => {
     if (!mgKeep) mgKeep = window.scrollY;
     setMgOpen(!mgOpen);

@@ -39,7 +39,7 @@
     const state = {
       phase: 0, levelIndex, status: 'playing', raw: new Set(), outline: new Set(),
       sketches: SKETCHES.map(() => new Set()), sketchIndex: 0,
-      grind: new Set(), shine: new Set(), sliced: false,
+      grind: new Set(), shine: new Set(), sliced: false, cuts: [],
       dimensions: { ...plateBase, thickness: 12 },
       reason: '', failedPath: [], assist: 0, version: 0
     };
@@ -74,7 +74,7 @@
       return { left: b.left - dx, right: b.right + dx, top: b.top - dy, bottom: b.bottom + dy };
     }
     function setDimensions(values) {
-      if (state.phase !== 1 || state.status !== 'playing' || pending) return false;
+      if (state.phase !== 1 || !state.sliced || state.status !== 'playing' || pending) return false;
       const dims = { ...state.dimensions, ...values };
       if (!Number.isFinite(dims.length) || !Number.isFinite(dims.width) || !Number.isFinite(dims.thickness)) return false;
       dims.length = Math.max(plateBase.length, Math.min(plateBase.length + 18, dims.length));
@@ -83,8 +83,45 @@
       if (JSON.stringify(dims) === JSON.stringify(state.dimensions)) return false;
       begin(); state.dimensions = dims; changed(); commit(); return true;
     }
+    /* 玉板是一个长方形，取下它要四条边各切一刀。四条边的坐标就是 boardRect()，
+       顺序随意，但引导线和示范都按「上 → 右 → 下 → 左」推进。 */
+    function plateEdges() {
+      const b = boardRect();
+      return [
+        { i: 0, name: '上边', a: { x: b.left, y: b.top }, b: { x: b.right, y: b.top }, cut: state.cuts.includes(0) },
+        { i: 1, name: '右边', a: { x: b.right, y: b.top }, b: { x: b.right, y: b.bottom }, cut: state.cuts.includes(1) },
+        { i: 2, name: '下边', a: { x: b.right, y: b.bottom }, b: { x: b.left, y: b.bottom }, cut: state.cuts.includes(2) },
+        { i: 3, name: '左边', a: { x: b.left, y: b.bottom }, b: { x: b.left, y: b.top }, cut: state.cuts.includes(3) }
+      ];
+    }
+    function nextEdge() {
+      return plateEdges().find(e => !e.cut) || plateEdges()[0];
+    }
+    /* 判定这一笔落在哪条边：贴线（垂直距离）够近，且沿边划过了足够长度。
+       允许反向划、允许略有弧度，但一笔只算一条边。 */
+    function classifyCut(path) {
+      if (!path || path.length < 2) return null;
+      let best = null;
+      for (const e of plateEdges()) {
+        if (e.cut) continue;
+        const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y, len2 = dx * dx + dy * dy || 1;
+        let minT = Infinity, maxT = -Infinity, maxD = 0;
+        for (const p of path) {
+          const t = ((p.x - e.a.x) * dx + (p.y - e.a.y) * dy) / len2;
+          minT = Math.min(minT, t); maxT = Math.max(maxT, t);
+          const px = e.a.x + dx * t, py = e.a.y + dy * t;
+          maxD = Math.max(maxD, Math.hypot(p.x - px, p.y - py));
+        }
+        const span = Math.min(1, maxT) - Math.max(0, minT);
+        if (maxD <= 30 && span >= 0.6) {
+          const score = span - maxD / 500;
+          if (!best || score > best.score) best = { edge: e, score };
+        }
+      }
+      return best ? best.edge : null;
+    }
     function confirmPlate() {
-      if (state.phase !== 1 || !state.sliced || state.status !== 'playing') return { kind: 'invalid', reason: '先沿横线切下一片玉料。' };
+      if (state.phase !== 1 || !state.sliced || state.status !== 'playing') return { kind: 'invalid', reason: '四条边都切完，才能取出玉板。' };
       begin();
       const b = boardRect();
       cutter.state.mask = E.BLANK.map((_, i) => {
@@ -95,7 +132,7 @@
     function progress() {
       if (state.status === 'complete') return 1;
       if (state.phase === 0) return fraction(state.raw, A.raw.points);
-      if (state.phase === 1) return state.sliced ? 1 : 0;
+      if (state.phase === 1) return state.sliced ? 1 : state.cuts.length / 4;
       if (state.phase === 2) return fraction(state.outline, OUTLINE_POINTS);
       if (state.phase === 3) return cutter.progress();
       if (state.phase === 4) return state.sketches.reduce((s, set, i) => s + fraction(set, SKETCH_POINTS[i]), 0) / SKETCHES.length;
@@ -133,11 +170,15 @@
       if (state.status !== 'playing') return { kind: 'ignored' };
       if ([0, 2, 4, 6, 7].includes(state.phase)) { begin(); paint(path); return end(options); }
       if (state.phase === 1) {
-        if (state.sliced) return { kind: 'invalid', reason: '玉板已切出。调整尺寸后，点击“取出玉板”。' };
-        const a = path[0], b = path[path.length - 1];
-        if (!a || !b || Math.abs(a.x - b.x) < 285 || Math.abs(a.y - 350) > 20 || Math.abs(b.y - 350) > 20)
-          return { kind: 'invalid', reason: '沿横向切片线，从一侧划到另一侧。' };
-        begin(); state.sliced = true; pending.assisted = !!options.assisted; changed(); commit(); return { kind: 'sliced' };
+        if (state.sliced) return { kind: 'invalid', reason: '玉板已经取好。调整尺寸后，点击“取出玉板”。' };
+        const edge = classifyCut(path);
+        if (!edge) return { kind: 'invalid', reason: '贴着虚线，从一端划到另一端；四条边各切一刀。' };
+        begin(); state.cuts.push(edge.i);
+        const done = state.cuts.length >= 4;
+        if (done) state.sliced = true;
+        pending.assisted = !!options.assisted; changed(); commit();
+        return done ? { kind: 'sliced', edge: edge.i, cuts: state.cuts.length }
+          : { kind: 'cut', edge: edge.i, cuts: state.cuts.length, name: edge.name };
       }
       begin(); const before = cutter.state.version;
       const result = cutter.stroke(path);
@@ -151,7 +192,7 @@
     }
     function guide() {
       if (state.phase === 0) return scan({ left: 55, right: 485, top: 65, bottom: 490 });
-      if (state.phase === 1) return [{ x: 80, y: 350 }, { x: 460, y: 350 }];
+      if (state.phase === 1) { const e = nextEdge(); return [e.a, e.b]; }
       if (state.phase === 2) return OUTLINE;
       if (state.phase === 4) return SKETCHES[state.sketchIndex].points;
       if (state.phase >= 6) { const b = E.ARTWORK.bounds; return scan({ left: b.left - 8, right: b.right + 8, top: b.top - 8, bottom: b.bottom + 8 }); }
@@ -161,7 +202,7 @@
       return [3, 5].includes(state.phase) ? cutter.preview(path) : { safe: true };
     }
     return { state, cutter, level: cutter.level, begin, paint, end, cancel, stroke, undo, setDimensions, confirmPlate,
-      boardRect, guide, preview, progress, plateBase, historySize: () => history.length,
+      boardRect, plateEdges, nextEdge, guide, preview, progress, plateBase, historySize: () => history.length,
       outlinePoints: OUTLINE_POINTS, sketchPoints: SKETCH_POINTS, brushPoints: cutter.polishPoints };
   }
   return { withArtwork: makeWorkshop, PHASES, OUTLINE, SKETCHES, createWorkshop };

@@ -110,3 +110,27 @@
 }
 
 @media(max-width:370px){.mobile-guide{margin-inline:-17px;padding-inline:17px}.workbench{width:calc(100% + 34px);margin-inline:-17px}}
+
+/* ——— 每步起手引导：起点脉冲 + 方向箭头 + 本步说明卡 ——— */
+.start-cue{position:absolute;z-index:6;width:0;height:0;pointer-events:none}
+.start-cue[hidden]{display:none}
+.cue-dot{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:#b04f37;box-shadow:0 0 0 2px #fdf6e8}
+.cue-ring{position:absolute;left:-17px;top:-17px;width:34px;height:34px;border-radius:50%;border:2px solid #b04f37b0;animation:cuePulse 1.9s ease-out infinite}
+@keyframes cuePulse{0%{transform:scale(.45);opacity:.95}65%{transform:scale(1.28);opacity:0}100%{opacity:0}}
+.cue-arrow{position:absolute;left:0;top:0;width:0;height:0;transform:rotate(var(--cue-angle,0deg))}
+.cue-arrow svg{position:absolute;left:12px;top:-10px;width:30px;height:20px;fill:none;stroke:#b04f37cc;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cue-label{position:absolute;left:0;top:18px;transform:translateX(-50%);white-space:nowrap;font-size:12px;line-height:1.7;color:#8c3f2c;background:#fdf6e8e8;padding:1px 9px;border-radius:var(--r-pill);border:1px solid #dfc3a2}
+.step-tip{position:absolute;z-index:7;left:50%;top:14px;transform:translateX(-50%);width:min(92%,392px);padding:12px 14px 11px;background:#fdf7e9f7;border:1.5px solid #d9c09c;border-radius:18px 14px 18px 12px;box-shadow:0 10px 26px #4a2f1c26,inset 0 1px 0 #fffdf6;text-align:left;pointer-events:none}
+.step-tip button{pointer-events:auto}
+.step-tip[hidden]{display:none}
+.tip-head{display:flex;align-items:center;gap:8px}
+.tip-kicker{font-size:12px;color:#a46643;letter-spacing:1px}
+.tip-close{margin-left:auto;width:26px;height:26px;border-radius:50%;color:#a08466;font-size:16px;line-height:1;flex-shrink:0}
+.tip-line{display:flex;gap:8px;margin:5px 0 0;font-size:13px;line-height:1.65;color:#5c4330}
+.tip-line i{flex-shrink:0;width:18px;height:18px;margin-top:2px;border-radius:50%;background:#ecdcc1;color:#8a5b3d;font:400 11px/18px var(--sans);font-style:normal;text-align:center}
+.tip-actions{display:flex;align-items:center;gap:10px;margin-top:10px}
+.tip-demo{min-height:34px;font-size:12px;color:#a14632;padding:0 4px}
+.tip-ok{margin-left:auto;min-height:34px;padding:0 15px;border-radius:var(--r-pill);background:linear-gradient(180deg,#b04f37,#9a412c);color:#fdf0d8;font-size:12px;box-shadow:0 2px 0 #7c3322}
+.tip-help{position:absolute;right:14px;top:44px;z-index:6;width:32px;height:32px;border-radius:50%;background:#fdf6e8d9;border:1.5px solid #d9bd97;color:#9c6a48;font:400 15px/1 var(--serif);box-shadow:0 2px 0 #d8bd98}
+.tip-help[aria-expanded=true]{background:#ecd9bb}
+@media(prefers-reduced-motion:reduce){.cue-ring{animation:none;opacity:.55}}
