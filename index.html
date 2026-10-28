@@ -39,6 +39,19 @@
     <section id="workshop-screen" hidden aria-label="玉作工坊">
     <div class="workshop-breadcrumb"><button id="back-home">← 回到红山</button><span>遇见器形 <i>／</i> 亲手琢玉 <i>／</i> 藏入图鉴</span></div>
     <section class="page-heading"><div><div class="eyebrow">红山玉作 <span>／</span> 一笔一刀，慢慢成器</div><h1>以双手，<em>唤醒一方玉。</em></h1><p>磨去石皮，循着器形，让温润一点点显现。</p></div><button id="level-button" class="level-picker" aria-haspopup="dialog"><span class="level-stamp">壹</span><span><small id="level-meta">难度一 / 共五档</small><strong id="level-name">初见玉形</strong></span><span class="picker-arrow">⌄</span></button></section>
+    <div class="mobile-guide" id="mobile-guide">
+      <div class="mg-head">
+        <span class="mg-count"><b id="mg-step">01</b><i>/08</i></span>
+        <span class="mg-name" id="mg-name">磨皮</span>
+        <span class="mg-rail" id="mg-rail" aria-hidden="true"></span>
+        <span class="mg-pct"><small>本步</small><b id="mg-pct">0%</b></span>
+      </div>
+      <button class="mg-main" id="mg-main" type="button" aria-expanded="false" aria-controls="mg-detail">
+        <span class="mg-say"><span class="mg-action" id="mg-action">按住来回拖动，磨去石皮</span><span class="mg-gesture" id="mg-gesture">按住擦拭 / 松手完成这一笔</span></span>
+        <svg class="icon mg-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="mg-detail" id="mg-detail" hidden><h3 id="mg-title"></h3><p id="mg-text"></p></div>
+    </div>
     <section class="workshop" aria-label="从原石到成器的玉器工坊">
       <aside class="process-panel"><div class="section-label">八道玉作 <span>从石到玉</span></div><ol class="step-list" id="step-list"></ol><div class="process-note"><span class="quote-mark">“</span><p>石有纹理，<br>手有记忆。</p><small>慢慢琢，玉自见。<br>每一步都可以撤回。</small></div><button id="sound-button" class="quiet-button" aria-pressed="false"><svg class="icon"><use href="#i-sound"/></svg><span>玉石音效 · 关</span></button></aside>
       <div class="workbench">
@@ -71,7 +84,7 @@
       </aside>
     </section>
     </section>
-    <footer class="page-footer"><span><span class="footer-seal">玉</span> 土地有痕，玉有回响。</span><span>红山玉作 v5.0 <i>·</i> 支持手指与鼠标 <i>·</i> 图鉴保存在当前设备</span><button id="about-button">关于玉见 ↗</button></footer>
+    <footer class="page-footer"><span><span class="footer-seal">玉</span> 土地有痕，玉有回响。</span><span>红山玉作 v5.1 <i>·</i> 支持手指与鼠标 <i>·</i> 图鉴保存在当前设备</span><button id="about-button">关于玉见 ↗</button></footer>
   </main>
   <dialog id="help-dialog" class="info-dialog"><button class="dialog-close" aria-label="关闭玩法说明" data-close><svg class="icon"><use href="#i-close"/></svg></button><div class="eyebrow">HOW TO PLAY</div><h2>先描形，再落刀。</h2><p class="dialog-intro">按住鼠标或手指拖动。没有计时压力；每一步都可以撤回。</p><div class="help-grid"><article><b>01—02</b><h3>磨皮 · 切板</h3><p>来回磨去整块石皮。沿横线切出玉板，调整长、宽和厚度，再取出玉板。</p></article><article><b>03—04</b><h3>描形 · 粗切</h3><p>先沿虚线描大轮廓，可以分几笔。之后用直线去掉四角余料，修出没有细节的毛胚。</p></article><article><b>05—06</b><h3>画细节 · 雕琢</h3><p>先画孔位、嘴部和纹样。画完才开孔、开口、琢纹，细处自动放大，逐渐形成半雕效果。</p></article><article><b>07—08</b><h3>细磨 · 抛光</h3><p>来回擦过整块器物，先细磨粗糙面，再抛光露出温润的原图成品。完成后自动收入本机图鉴。</p></article></div><p class="help-note">切伤主体、刻错纹样或刀数耗尽，整块玉料会报废。可以“撤回上一步”恢复到出错前，也可以重新开料。Ctrl/⌘ + Z 撤回，Esc 取消还没松手的一笔，R 重开。示范会影响星级；描画和擦拭不计刀数。</p><button class="primary-button" data-close>知道了，慢慢琢玉 <svg class="icon"><use href="#i-arrow"/></svg></button></dialog>
   <dialog id="material-dialog" class="info-dialog"><button class="dialog-close" aria-label="关闭器物选择" data-close><svg class="icon"><use href="#i-close"/></svg></button><div class="eyebrow">遇见器形 / 开启玉作</div><h2>选一件，慢慢做。</h2><p class="dialog-intro">每件都有自己的器形与纹路。选择后从原石开始，八道工序，亲手完成。</p><div id="artifact-list" class="artifact-list"></div><p class="collection-note">切换器物会重新开料，已完成的图鉴保留。五件沿用原版图样；器物定名与来源以项目资料为准。</p></dialog>
@@ -80,6 +93,15 @@
   <dialog id="result-dialog" class="result-dialog"><div id="result-content"></div></dialog>
   <dialog id="culture-dialog" class="info-dialog culture-dialog"><button class="dialog-close" aria-label="关闭红山手记" data-close><svg class="icon"><use href="#i-close"/></svg></button><div class="eyebrow">红山手记 / 视觉从何而来</div><h2>山色、陶纹，与玉的相遇。</h2><p class="dialog-intro">红山文化是中国东北地区新石器时代的重要考古学文化。这里把山、土、陶、玉，变成可以看见、也可以动手体验的设计线索。</p><div class="culture-notes"><article><b>赭红山色</b><p>“红山文化”因赤峰红山后遗址得名。当地红山山体呈赭红色，本版据此选用赭红、砂岩与陶土色。</p><a href="https://www.hongshanqu.gov.cn/zjhs/whls/wwgj/" target="_blank" rel="noopener noreferrer">来源：赤峰市红山区人民政府 ↗</a></article><article><b>陶上的线条</b><p>红山文化陶器中有红色泥质陶、彩陶与之字纹陶。本版把平行线、三角与曲线转译成分隔纹带和装饰线描。</p><a href="https://www.chnmuseum.cn/zp/zpml/kgfjp/202107/t20210719_250724.shtml" target="_blank" rel="noopener noreferrer">来源：中国国家博物馆《彩陶碗》 ↗</a></article><article><b>玉里的器形</b><p>红山文化有鲜明的制玉传统，玉龙、勾云形器等为其中的代表。本版通过描形、琢纹与抛光，让观察器物成为一次亲手参与的体验。</p><a href="https://www.chnmuseum.cn/portals/0/web/zt/202010ychsh/" target="_blank" rel="noopener noreferrer">来源：中国国家博物馆《玉出红山》 ↗</a></article></div><p class="collection-note">首页的壁画感画面是以山色、陶纹和器形创作的当代插画；线描为设计转译，并非红山文化出土壁画或遗址原貌的复原。游戏八道工序为简化互动演绎。</p><button class="primary-button" data-close>带着这些线索，去遇见一块玉 <svg class="icon"><use href="#i-arrow"/></svg></button></dialog>
   <dialog id="about-dialog" class="info-dialog"><button class="dialog-close" aria-label="关闭作品介绍" data-close><svg class="icon"><use href="#i-close"/></svg></button><div class="eyebrow">ABOUT THE WORK</div><h2>一块石，慢慢有了模样。</h2><p class="dialog-intro">《玉见》将磨皮、切板、描形、粗切、画细节、雕琢、细磨和抛光串成八道可以动手完成的工序。</p><p class="about-copy">原来的来图玉器使用你提供的《图片 10.png》《图片 8.png》与已确认的阶段图。新增玉鳖、玉鸮、瓦纹饰、绿松石鱼饰依据这次的照片整理，去除了背景和编号，保留可辨认的器形与材质特点。被编号遮住的表面采用邻近纹理视觉补全。</p><p class="about-copy">新增器物的原石、玉板和毛胚按各自的玉色或绿松石色绘制，纹样只有完成描画和雕琢才逐步出现。玉板尺寸为体验比例，粗切后的边缘修整自动衔接；这不是考古工艺复原。全部素材随游戏保存，离线可玩；原始照片与旧版记录保留。</p><button class="primary-button" data-close>回到工坊 <svg class="icon"><use href="#i-arrow"/></svg></button></dialog>
+  <div class="coach" id="coach" hidden>
+    <div class="coach-hole" id="coach-hole" aria-hidden="true"></div>
+    <div class="coach-bubble" id="coach-bubble" role="dialog" aria-labelledby="coach-title">
+      <span class="coach-kicker" id="coach-kicker">1 / 3</span>
+      <h3 id="coach-title"></h3>
+      <p id="coach-text"></p>
+      <div class="coach-actions"><button type="button" class="coach-skip" data-coach="skip">跳过</button><button type="button" class="coach-next" data-coach="next">知道了 <svg class="icon"><use href="#i-arrow"/></svg></button></div>
+    </div>
+  </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="jade-model.js"></script><script src="stage-assets.js"></script><script src="artifact-models.js"></script><script src="engine.js"></script><script src="workshop-engine.js"></script><script src="game.js"></script>
 </body>

@@ -411,7 +411,17 @@
     $('instruction-index').textContent = `第${words[s.phase]}道 · ${W.PHASES[s.phase]}`;
     $('instruction-title').textContent = s.status === 'complete' ? '玉已成器，收入图鉴' : spec.title;
     $('instruction-text').textContent = s.status === 'complete' ? '从磨皮到抛光，你已经走完八道工序。可以在图鉴欣赏，也可以再试一种难度。' : spec.text;
-    $('board-message-text').textContent = loadError || (!ready ? '正在准备原石与阶段素材…' : s.status === 'failed' ? '玉料已报废 · 可以撤回刚才的一刀' : s.status === 'complete' ? '温润成器 · 已收入本机图鉴' : spec.message);
+    const boardText = loadError || (!ready ? '正在准备原石与阶段素材…' : s.status === 'failed' ? '玉料已报废 · 可以撤回刚才的一刀' : s.status === 'complete' ? '温润成器 · 已收入本机图鉴' : spec.message);
+    $('board-message-text').textContent = boardText;
+    $('mg-step').textContent = String(s.phase + 1).padStart(2, '0');
+    $('mg-name').textContent = W.PHASES[s.phase];
+    $('mg-pct').textContent = p + '%';
+    $('mg-action').textContent = boardText;
+    $('mg-gesture').textContent = spec.gesture;
+    $('mg-title').textContent = s.status === 'complete' ? '玉已成器，收入图鉴' : spec.title;
+    $('mg-text').textContent = s.status === 'complete' ? '从磨皮到抛光，你已经走完八道工序。可以在图鉴欣赏，也可以再试一种难度。' : spec.text;
+    const rail = $('mg-rail');
+    if (rail.children.length) [...rail.children].forEach((seg, i) => { seg.className = s.status === 'complete' || i < s.phase ? 'done' : i === s.phase ? 'current' : ''; });
     $('gesture-tip').textContent = spec.gesture;
     $('assist-button').innerHTML = `${s.phase === 1 && s.sliced ? '请先确认玉板尺寸' : spec.assist} <svg class="icon"><use href="#i-arrow"/></svg>`;
     $('assist-button').disabled = !ready || busy || dragging || s.status !== 'playing' || (s.phase === 1 && s.sliced);
@@ -568,7 +578,10 @@
       clearTimeout(flashTimer); flashTimer = setTimeout(() => { $('stage-flash').classList.remove('show'); $('stage-flash').querySelector('span').textContent = ''; }, reduced ? 10 : 650);
     } else if (['cut', 'detail'].includes(result.kind)) sound('cut');
     updateUI();
-    if (result.kind === 'advance' || result.kind === 'sliced') requestAnimationFrame(() => canvas.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    if (result.kind === 'advance' || result.kind === 'sliced') requestAnimationFrame(() => {
+      if (matchMedia('(max-width: 950px)').matches) scrollUnderBar(canvas.closest('.workbench'));
+      else canvas.scrollIntoView({ block: 'center', behavior: 'instant' });
+    });
   }
   function point(event) {
     const r = canvas.getBoundingClientRect(), v = view();
@@ -687,6 +700,76 @@
       $('collection-grid').append(item); drawArtifact(item.querySelector('canvas'), artifact);
     }); $('collection-dialog').showModal();
   }
+  /* ————————————— 移动端引导条 —————————————
+     层级只有一个主提示：我在哪（进度轨）→ 做什么（spec.message）→ 怎么做（spec.gesture）。
+     桌面端这层 display:none，三栏布局不受影响。 */
+  let mgOpen = false;
+  function buildRail() {
+    const rail = $('mg-rail'); if (!rail || rail.children.length) return;
+    for (let i = 0; i < 8; i++) rail.append(document.createElement('i'));
+  }
+  function setMgOpen(open) {
+    mgOpen = !!open;
+    $('mg-main').setAttribute('aria-expanded', String(mgOpen));
+    $('mg-detail').hidden = !mgOpen;
+  }
+  /* ————————————— 首次进入的三步气泡 —————————————
+     只在移动端出现，只在工坊页出现；看过一次就不再打扰。 */
+  const COACH_KEY = 'yujian-coach-v1';
+  let coachSeen = false;
+  try { coachSeen = localStorage.getItem(COACH_KEY) === '1'; } catch (_) { /* 隐私模式下不记忆 */ }
+  const coachSteps = [
+    { target: '#canvas-wrap', scroll: '.workbench', title: '这里就是玉料', text: '按住拖动，磨过、擦过的地方才会起变化。松手就算完成这一笔，不满意随时撤回。' },
+    { target: '#mobile-guide', title: '看这一条就够了', text: '第几步、这一步要做什么、完成到多少，都写在这里。点这一条可以展开本步的详细解说。' },
+    { target: '#undo-button', title: '做错不用重来', text: '撤回上一步，不影响星级。只有同一块玉上连续下错刀，玉料才会报废。' }
+  ];
+  let coachIndex = 0;
+  function barOffset() {
+    const bar = $('mobile-guide');
+    return bar && bar.offsetParent ? bar.getBoundingClientRect().height + 10 : 0;
+  }
+  function scrollUnderBar(el) {
+    const offset = barOffset();
+    if (!offset) { el.scrollIntoView({ block: 'center', behavior: 'instant' }); return; }
+    window.scrollTo({ top: Math.max(0, window.scrollY + el.getBoundingClientRect().top - offset), behavior: 'instant' });
+  }
+  function placeCoach() {
+    const el = document.querySelector(coachSteps[coachIndex].target); if (!el) return;
+    const r = el.getBoundingClientRect(), hole = $('coach-hole'), bubble = $('coach-bubble'), pad = 6;
+    hole.style.top = (r.top - pad) + 'px'; hole.style.left = (r.left - pad) + 'px';
+    hole.style.width = (r.width + pad * 2) + 'px'; hole.style.height = (r.height + pad * 2) + 'px';
+    const bw = bubble.offsetWidth, bh = bubble.offsetHeight, gap = 14;
+    const left = Math.min(Math.max(12, r.left + r.width / 2 - bw / 2), innerWidth - bw - 12);
+    const minTop = barOffset();
+    let top = r.bottom + gap;
+    if (top + bh > innerHeight - 12) {
+      const above = r.top - gap - bh;
+      top = above >= minTop ? above : Math.max(minTop, innerHeight - bh - 12);
+    }
+    bubble.style.left = left + 'px'; bubble.style.top = Math.max(minTop, top) + 'px';
+  }
+  function showCoach(i) {
+    coachIndex = i;
+    const step = coachSteps[i], el = document.querySelector(step.target);
+    if (!el) return finishCoach();
+    if (step.target === '#mobile-guide') window.scrollTo({ top: 0, behavior: 'instant' });
+    else scrollUnderBar(step.scroll ? document.querySelector(step.scroll) : el);
+    $('coach').hidden = false;
+    $('coach-kicker').textContent = `${i + 1} / ${coachSteps.length}`;
+    $('coach-title').textContent = step.title; $('coach-text').textContent = step.text;
+    $('coach-bubble').style.visibility = 'hidden';
+    requestAnimationFrame(() => { placeCoach(); $('coach-bubble').style.visibility = 'visible'; $('coach-bubble').querySelector('[data-coach="next"]').focus({ preventScroll: true }); });
+  }
+  function finishCoach() {
+    $('coach').hidden = true; coachSeen = true;
+    if (document.body.dataset.view === 'workshop') scrollUnderBar(canvas.closest('.workbench'));
+    try { localStorage.setItem(COACH_KEY, '1'); } catch (_) { /* 隐私模式下不记忆 */ }
+  }
+  function maybeCoach() {
+    if (coachSeen || !ready) return;
+    if (!matchMedia('(max-width: 950px)').matches) return;
+    setTimeout(() => { if (!coachSeen && document.body.dataset.view === 'workshop') showCoach(0); }, 520);
+  }
   function openArtifacts() {
     $('artifact-list').replaceChildren();
     catalogue.forEach(item => {
@@ -710,8 +793,9 @@
     $('home-screen').hidden = true; $('workshop-screen').hidden = false;
     document.body.dataset.view = 'workshop';
     $('home-button').removeAttribute('aria-current'); $('choose-artifact-button').setAttribute('aria-current', 'page');
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    canvas.focus({ preventScroll: true }); schedule();
+    if (matchMedia('(max-width: 950px)').matches) requestAnimationFrame(() => scrollUnderBar(canvas.closest('.workbench')));
+    else window.scrollTo({ top: 0, behavior: 'instant' });
+    canvas.focus({ preventScroll: true }); schedule(); maybeCoach();
   }
   function fillHomeArtifacts() {
     const notes = ['观卷曲与留白', '观甲壳与对称', '观双目与羽纹', '观横纹与弧面', '观鱼形与穿孔'];
@@ -759,6 +843,16 @@
     if (e.key.toLowerCase() === 'r' && !input && !e.ctrlKey && !e.metaKey && !document.querySelector('dialog[open]')) { startLevel(game.state.levelIndex); e.preventDefault(); }
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden && dragging && !busy) cancelStroke(); });
+  buildRail();
+  let mgKeep = 0;
+  $('mg-main').addEventListener('pointerdown', () => { mgKeep = window.scrollY; });
+  $('mg-main').addEventListener('click', () => {
+    if (!mgKeep) mgKeep = window.scrollY;
+    setMgOpen(!mgOpen);
+    requestAnimationFrame(() => { if (Math.abs(window.scrollY - mgKeep) > 2) window.scrollTo({ top: mgKeep, behavior: 'instant' }); });
+  });
+  document.querySelectorAll('[data-coach]').forEach(b => b.addEventListener('click', () => { if (b.dataset.coach === 'next') { if (coachIndex + 1 < coachSteps.length) showCoach(coachIndex + 1); else finishCoach(); } else finishCoach(); }));
+  window.addEventListener('resize', () => { if (!$('coach').hidden) placeCoach(); });
   chooseArtifact(save.lastArtifact, Number.isInteger(save.lastLevel) && E.LEVELS[save.lastLevel] ? save.lastLevel : 0);
   fillHomeArtifacts();
   const all = Object.entries(A).map(([key, info]) => [key, info.image]).concat(catalogue.map(item => [item.id + '-final', item.model.image]));

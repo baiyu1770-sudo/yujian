@@ -23,3 +23,90 @@
    2x 屏（手机、Retina）本来就不掉，不描边，保留原字形的粗细对比。
    反白字（深底上的浅字）不加——白字加描边会糊成一团。 */
 @media (max-resolution:1.5dppx){body{-webkit-text-stroke:.2px currentColor}.primary-button,.step.current .step-index,.stage-flash,.toast,.landscape-label,.hero-landscape figcaption{-webkit-text-stroke:0}}
+
+/* ——— 移动端工坊：引导条 / 一屏可操作 / 触控与字号下限（仅 ≤950px 生效，桌面三栏不变）——— */
+.mobile-guide{display:none}
+.coach[hidden]{display:none}
+.coach{position:fixed;inset:0;z-index:90;touch-action:none}
+.coach-hole{position:fixed;border-radius:16px;box-shadow:0 0 0 200vmax rgba(46,31,20,.6);pointer-events:none;transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease}
+.coach-bubble{position:fixed;background:linear-gradient(180deg,#fdf7e9,#f4e6cd);border:1.5px solid #d3b58c;border-radius:20px 16px 20px 14px;box-shadow:0 12px 32px #4a2f1c3d,inset 0 1px 0 #fffdf6;padding:16px 18px 14px;width:min(302px,calc(100vw - 36px))}
+.coach-kicker{font-size:11px;letter-spacing:2px;color:#a46643}
+.coach-bubble h3{margin:6px 0 6px;font:400 18px/1.5 var(--serif);color:#5d4028;letter-spacing:1px}
+.coach-bubble p{margin:0;font-size:13px;line-height:1.8;color:#7a6047}
+.coach-actions{display:flex;align-items:center;gap:10px;margin-top:13px}
+.coach-skip{font-size:12px;color:#9a8066;padding:10px 4px;min-height:40px}
+.coach-next{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 16px;border-radius:var(--r-pill);background:linear-gradient(180deg,#b04f37,#9a412c);color:#fdf0d8;font-size:13px;box-shadow:0 2px 0 #7c3322}
+.coach-next .icon{width:14px;height:14px;color:#fdf0d8}
+@media(max-width:950px){
+  .mobile-guide{display:block;position:sticky;top:0;z-index:40;margin:0 -26px 15px;padding:9px 26px 11px;background:linear-gradient(180deg,#fcf6e8fa,#f4e7d0f7);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1.5px solid #d8c2a1;box-shadow:0 10px 22px #74512f1a}
+  .mg-head{display:flex;align-items:center;gap:9px;min-height:24px}
+  .mg-count{display:flex;align-items:baseline;gap:1px;flex-shrink:0}
+  .mg-count b{font:400 20px/1 Georgia,serif;color:var(--red)}
+  .mg-count i{font-style:normal;font-size:11px;color:#a48b6d;letter-spacing:.5px}
+  .mg-name{font:400 14px/1 var(--serif);color:#6b4a33;letter-spacing:1px;flex-shrink:0}
+  .mg-rail{display:flex;gap:3px;flex:1;min-width:36px}
+  .mg-rail i{flex:1;height:5px;border-radius:3px;background:#e0ccab}
+  .mg-rail i.done{background:#c49a68}
+  .mg-rail i.current{background:var(--red);box-shadow:0 0 0 2px #a1463226}
+  .mg-pct{display:flex;align-items:baseline;gap:3px;flex-shrink:0;min-width:52px;justify-content:flex-end}
+  .mg-pct small{font-size:10px;color:#a0896e;letter-spacing:.5px}
+  .mg-pct b{font:12px/1 Georgia,serif;color:#8a6a4c;font-variant-numeric:tabular-nums;min-width:26px;text-align:right}
+  .mg-main{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:5px 0 0;min-height:44px}
+  .mg-say{flex:1;min-width:0}
+  .mg-action{display:block;font-size:16px;line-height:1.45;color:#38271a;font-weight:500;letter-spacing:.2px}
+  .mg-gesture{display:block;font-size:13px;line-height:1.5;color:#7d6045;margin-top:3px}
+  .mg-chev{width:18px;height:18px;flex-shrink:0;color:#b08d64;transition:transform .2s}
+  .mg-main[aria-expanded=true] .mg-chev{transform:rotate(180deg)}
+  .mg-detail{padding:10px 0 2px;border-top:1px dashed #dcc5a4;margin-top:9px}
+  .mg-detail[hidden]{display:none}
+  .mg-detail h3{font:400 15px/1.5 var(--serif);color:#6b4a33;margin:0 0 5px}
+  .mg-detail p{margin:0;font-size:13px;line-height:1.85;color:#7a6047}
+
+  .page-heading{padding:4px 0 13px}
+  .page-heading h1,.page-heading p{display:none}
+  .page-heading .eyebrow{font-size:10px}
+
+  .process-panel{display:none!important}
+  .board-message{display:none}
+  .bench-axis,.corner{display:none}
+  .bench-header{font-size:12px;min-height:46px;padding:10px 14px}
+  .material-label{font-size:12px;min-height:44px;display:flex;align-items:center;padding:0}
+  .bench-footer{padding:9px 14px;justify-content:center;font-size:13px}
+  #gesture-tip{display:none}
+  .live-cut{display:block;width:100%;text-align:center;font-size:13px;color:#7a5a3c}
+  .live-cut.danger{color:#98331f}
+  .view-tag{font-size:11px;padding:5px 11px}
+
+  .tool-strip{padding:8px 10px;gap:8px}
+  .tool{font-size:13px;gap:6px}
+  .tool .icon{width:18px;height:18px}
+  .tool-strip #assist-button{min-height:44px;font-size:13px;padding:0 6px;margin-left:auto}
+  #undo-button{min-height:44px;font-size:13px;padding:0 12px;gap:6px}
+  #undo-button kbd{display:none}
+
+  .plate-controls label{min-height:44px;font-size:13px}
+  .plate-controls input{height:28px}
+  .plate-controls output{font-size:13px}
+  .plate-control-heading{font-size:12px}
+  .plate-control-heading strong{font-size:13px}
+  #confirm-plate{min-height:48px;font-size:14px}
+
+  .guide-panel{gap:16px}
+  .instruction-card{display:none}
+  .cut-budget .section-label>span{font-size:12px}
+  .progress-block>div:first-child{font-size:12px}
+  #overall-progress{font-size:12px}
+  .target-caption{font-size:11px;line-height:1.6}
+  .target-name>span{font-size:11px}
+  .reference-tabs{font-size:12px}
+  .secondary-button{min-height:46px;font-size:13px}
+  .restart-button{min-height:44px;font-size:13px}
+}
+@media(max-width:700px){
+  .mobile-guide{margin:0 -22px 14px;padding:8px 22px 10px}
+  .workbench{width:calc(100% + 44px);margin:0 -22px;border-left:0;border-right:0;border-radius:0}
+  .canvas-wrap{border-radius:0}
+  .workshop-breadcrumb{margin-top:10px}
+}
+
+@media(max-width:370px){.mobile-guide{margin-inline:-17px;padding-inline:17px}.workbench{width:calc(100% + 34px);margin-inline:-17px}}
