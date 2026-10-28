@@ -67,11 +67,33 @@
       restore(saved); return true;
     }
     function cancel() { if (pending) restore(pending.saved); pending = null; }
+    /* 板框的四条边必须落在料上。设计数据里的 blank 比料本身还高（上边高 6、下边低 2），
+       所以先夹到物料范围里；夹完还要保证板仍包住器物外形（bounds），否则取出的板放不下器形。
+       物料范围优先用原石的 alpha 轮廓（game.js 量好写进 model.material），
+       拿不到时退回「可磨点」的外接框。 */
+    const pointBox = (() => {
+      const pts = A.raw && A.raw.points;
+      if (!pts || !pts.length) return null;
+      let l = 1e9, t = 1e9, r = -1e9, b = -1e9;
+      for (const p of pts) { if (p.x < l) l = p.x; if (p.x > r) r = p.x; if (p.y < t) t = p.y; if (p.y > b) b = p.y; }
+      return { left: l, top: t, right: r, bottom: b };
+    })();
+    function plateBounds() {
+      const b = E.ARTWORK.blank, o = E.ARTWORK.bounds;
+      const m = (A.raw && A.raw.material) || pointBox;   // 注意：model.material 是材料名，不是坐标框
+      if (!m) return { ...b };
+      return {
+        left: Math.min(Math.max(b.left, m.left), o.left),
+        top: Math.min(Math.max(b.top, m.top), o.top),
+        right: Math.max(Math.min(b.right, m.right), o.right),
+        bottom: Math.max(Math.min(b.bottom, m.bottom), o.bottom)
+      };
+    }
     function boardRect() {
       const dx = (state.dimensions.width - plateBase.width) * 3.65 / 2;
       const dy = (state.dimensions.length - plateBase.length) * 3.65 / 2;
-      const b = E.ARTWORK.blank;
-      return { left: b.left - dx, right: b.right + dx, top: b.top - dy, bottom: b.bottom + dy };
+      const p = plateBounds();
+      return { left: p.left - dx, right: p.right + dx, top: p.top - dy, bottom: p.bottom + dy };
     }
     function setDimensions(values) {
       if (state.phase !== 1 || !state.sliced || state.status !== 'playing' || pending) return false;
