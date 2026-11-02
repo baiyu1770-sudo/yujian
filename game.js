@@ -13,7 +13,7 @@
     raw.__fit = K;
   })();
   let E = BaseE, W = BaseW;
-  const catalogue = [{ id: 'dragon', name: '卷身玉器', material: '米白褐斑玉质', model: window.JadeArtwork, procedural: false }, ...(window.JadeCatalogue || [])];
+  const catalogue = [{ id: 'dragon', name: '玉猪龙', material: '米白褐斑玉质', model: window.JadeArtwork, procedural: false }, ...(window.JadeCatalogue || [])];
   let active = catalogue[0];
   const $ = id => document.getElementById(id);
   const canvas = $('jade-canvas'), ctx = canvas.getContext('2d');
@@ -726,7 +726,7 @@
     catalogue.forEach(artifact => {
       const records = E.LEVELS.map((_, i) => save.records[recordKey(artifact.id, i)]).filter(Boolean);
       const record = records.sort((a, b) => (Number(b.stars) || 0) - (Number(a.stars) || 0))[0], item = document.createElement('article'); item.className = 'collection-item' + (record ? '' : ' empty');
-      item.innerHTML = '<canvas width="320" height="280" aria-label="来图玉器成品"></canvas><h3></h3><div class="stars"></div><p></p>';
+      item.innerHTML = '<canvas width="320" height="280" aria-label="玉猪龙成品"></canvas><h3></h3><div class="stars"></div><p></p>';
       item.querySelector('h3').textContent = artifact.name; item.querySelector('.stars').textContent = record ? starsText(record.stars) : '· · ·';
       item.querySelector('p').textContent = record ? `${artifact.material} · 已完成 ${records.length} 档难度` : artifact.material + ' · 等待你亲手完成';
       $('collection-grid').append(item); drawArtifact(item.querySelector('canvas'), artifact);
