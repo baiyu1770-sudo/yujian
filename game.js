@@ -39,8 +39,8 @@
   let chips = [], audioContext, emitAcc = 0, palette = null;
   const TOUCH = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
   let guideCache = { key: '', pts: [] };
-  let save = { records: {}, sound: false, lastLevel: 0 };
-  let practiceMode = false, firstCompletion = false;
+  let save = { records: {}, sound: true, lastLevel: 0 };
+  let practiceMode = false, firstCompletion = false, runFlaws = 0;
   try {
     const data = JSON.parse(localStorage.getItem(STORE));
     if (data && typeof data.records === 'object' && data.records) save = { ...save, ...data };
@@ -69,6 +69,14 @@
         osc.connect(gain).connect(audioContext.destination); osc.start(now + i * .08); osc.stop(now + i * .08 + .6);
       });
     } catch (_) { /* Audio is optional. */ }
+  }
+  function haptic(pattern) {
+    if (!TOUCH || !navigator.vibrate) return;
+    try { navigator.vibrate(pattern); } catch (_) { /* Haptics are optional. */ }
+  }
+  function toggleSound() {
+    save.sound = !save.sound; persist(); updateUI();
+    if (save.sound) sound('cut');
   }
   /* ————————————— 碎屑粒子 —————————————
      磨皮与切片是两种完全不同的去除：磨是「把石皮搓成粉」，粉细、轻、贴着手往下簌簌落；
@@ -462,12 +470,14 @@
     $('target-caption').textContent = referencePhase ? W.PHASES[s.phase] + (active.procedural ? ' · 当前制作状态' : ' · 工序效果参考') : '成品参考 · 操作区从原石开始';
     if (!referencePhase) drawArtifact($('target-canvas'));
     $('sound-button').setAttribute('aria-pressed', String(!!save.sound)); $('sound-button').querySelector('span').textContent = `玉石音效 · ${save.sound ? '开' : '关'}`;
+    const mgSound = $('mg-sound'); if (mgSound) mgSound.setAttribute('aria-pressed', String(!!save.sound));
     if (s.phase !== tipPhase) { tipPhase = s.phase; cueAnchor = null; hideStepTip(false); setTimeout(() => showStepTip(false), 140); }
     placeCue();
     schedule();
   }
   function startLevel(index, practice = false) {
     practiceMode = !!practice;
+    runFlaws = 0;
     session++; clearTimeout(flashTimer); clearTimeout(resultTimer); cancelAnimationFrame(demoFrame);
     if (captured !== null && canvas.hasPointerCapture(captured)) canvas.releasePointerCapture(captured);
     captured = null; busy = dragging = false; path = []; hover = preview = null; chips = [];
@@ -602,17 +612,19 @@
       }
     }
     $('live-cut').classList.remove('danger');
-    $('live-cut').textContent = result.kind === 'failed' ? '玉料已报废 · 可以撤回' : result.kind === 'complete' ? '温润成器 · 已收入图鉴' : result.kind === 'cut' ? (result.cuts ? `${result.name}已切 · ${result.cuts} / 4 刀` : '这一刀已落下 · 可以撤回') : result.kind === 'paint' ? '这一笔已留下 · 可以撤回' : '这一笔已完成 · 可以撤回';
+    $('live-cut').textContent = result.kind === 'failed' ? '这一刀留了痕 · 可以补救' : result.kind === 'complete' ? '温润成器 · 已收入图鉴' : result.kind === 'cut' ? (result.cuts ? `${result.name}已切 · ${result.cuts} / 4 刀` : '这一刀已落下 · 可以撤回') : result.kind === 'paint' ? '这一笔已留下 · 可以撤回' : '这一笔已完成 · 可以撤回';
     if (result.kind === 'failed' || result.kind === 'complete') {
-      sound(result.kind); finishedAt = Date.now();
+      if (result.kind === 'failed') runFlaws++;
+      sound(result.kind); haptic(result.kind === 'failed' ? [18, 40, 18] : [12, 45, 12, 45, 24]); finishedAt = Date.now();
       if (result.kind === 'complete') saveCompletion();
       const token = session; clearTimeout(resultTimer);
       resultTimer = setTimeout(() => { if (session === token && game.state.status === (result.kind === 'failed' ? 'failed' : 'complete')) showResult(); }, reduced ? 0 : 420);
     } else if (result.kind === 'advance' || result.kind === 'sliced') {
-      sound('advance'); const name = game.state.phase !== oldPhase ? W.PHASES[oldPhase] + '完成' : result.kind === 'sliced' ? '玉板已切出' : '这一笔完成';
+      sound('advance'); haptic(10); const name = game.state.phase !== oldPhase ? W.PHASES[oldPhase] + '完成' : result.kind === 'sliced' ? '玉板已切出' : '这一笔完成';
       $('stage-flash').querySelector('span').textContent = name; $('stage-flash').classList.add('show');
       clearTimeout(flashTimer); flashTimer = setTimeout(() => { $('stage-flash').classList.remove('show'); $('stage-flash').querySelector('span').textContent = ''; }, reduced ? 10 : 650);
-    } else if (['cut', 'detail'].includes(result.kind)) sound('cut');
+    } else if (['cut', 'detail'].includes(result.kind)) { sound('cut'); haptic(8); }
+    else if (result.kind === 'paint') haptic(4);
     updateUI();
     if (result.kind === 'sliced') setTimeout(() => {
       const pc = $('plate-controls');
@@ -740,17 +752,30 @@
   function showResult() {
     const dialog = $('result-dialog'), failed = game.state.status === 'failed'; dialog.classList.toggle('failed', failed);
     if (failed) {
-      $('result-content').innerHTML = '<div class="eyebrow">TAKE ONE STEP BACK</div><h2>玉料已报废。</h2><p class="result-description" id="failure-reason"></p><p class="result-description">可以撤回刚才的一刀，恢复到出错前；也可以从原石重新开始。</p><button class="primary-button" id="undo-result">撤回刚才的一刀</button><button class="text-button" id="retry-result">整块重来，从原石开始</button><button class="text-button" id="review-result">看看刚才的刀痕</button>';
-      $('failure-reason').textContent = game.state.reason;
-      $('undo-result').addEventListener('click', undo); $('retry-result').addEventListener('click', () => startLevel(game.state.levelIndex)); $('review-result').addEventListener('click', () => dialog.close());
+      $('result-content').innerHTML = '<div class="eyebrow">A MARK, NOT A FAILURE</div><h2>这一刀留下了痕。</h2><p class="result-description" id="failure-reason"></p><p class="result-description">可以退回到落刀前补一刀；也可以换一块料重来。补过的痕迹会留在这一件上。</p><button class="primary-button" id="undo-result">补救 · 回到落刀前</button><button class="text-button" id="retry-result">换一块料，重新开始</button><button class="text-button" id="review-result">看看刚才的刀痕</button>';
+      $('failure-reason').textContent = (game.state.reason || '').replace(/玉料开裂，请重新开料。?/, '玉料上留下了一道裂痕。');
+      $('undo-result').addEventListener('click', () => { undo(); toast('已补救：回到落刀前，石痕留在这一件上。'); }); $('retry-result').addEventListener('click', () => startLevel(game.state.levelIndex)); $('review-result').addEventListener('click', () => dialog.close());
     } else {
       const practice = practiceMode;
-      const note = practice ? '练习模式 · 本次不计入图鉴，可以随时重来。' : firstCompletion ? '首次完成 · 不扣提示星，已收入图鉴。' : '';
+      const notes = [];
+      if (practice) notes.push('练习模式 · 本次不计入图鉴，可以随时重来。');
+      else if (firstCompletion) notes.push('首次完成 · 不扣提示星，已收入图鉴。');
+      if (runFlaws) notes.push(`石痕 ×${runFlaws} · 这一件留着你补过的痕迹。`);
+      const note = notes.join(' ');
       const actions = practice
         ? '<button class="primary-button" id="collect-result">再练一次</button><button class="text-button" id="next-result">换一档难度</button><button class="text-button" id="review-result">回到工坊，看看这一件</button>'
         : '<button class="primary-button" id="collect-result">已收入图鉴 · 去看看</button><button class="text-button" id="next-result">再试一方玉 · 下一档难度</button><button class="text-button" id="review-result">回到工坊，欣赏成品</button>';
       $('result-content').innerHTML = '<div class="eyebrow">FROM YOUR HANDS, A JADE IS BORN</div><h2>慢慢琢，终于成器。</h2><canvas class="result-art" id="result-art" width="480" height="430"></canvas><div class="result-stars" id="result-stars"></div><p class="result-description" id="success-description"></p><p class="result-note" id="result-note" hidden></p><div class="result-stats"><div><strong id="result-cuts"></strong><span>切片与雕琢</span></div><div><strong id="result-time"></strong><span>手作用时</span></div><div><strong id="result-assisted"></strong><span>提示次数</span></div></div>' + actions;
       drawArtifact($('result-art'));
+      if (runFlaws) {
+        const rc = $('result-art').getContext('2d');
+        rc.save(); rc.strokeStyle = 'rgba(104,74,48,.42)'; rc.lineWidth = 1.1;
+        for (let i = 0; i < Math.min(3, runFlaws); i++) {
+          const x = 228 + i * 18, y = 186 + i * 15;
+          rc.beginPath(); rc.moveTo(x - 14, y - 8); rc.lineTo(x + 14, y + 9); rc.stroke();
+        }
+        rc.restore();
+      }
       if (practice) {
         $('result-stars').textContent = '练习完成 · 不计星';
         $('result-stars').classList.add('practice');
@@ -1017,7 +1042,8 @@
   $('level-button').addEventListener('click', openLevels); $('collection-button').addEventListener('click', openCollection);
   $('help-button').addEventListener('click', () => $('help-dialog').showModal()); $('about-button').addEventListener('click', () => $('about-dialog').showModal()); $('material-button').addEventListener('click', openArtifacts);
   $('choose-artifact-button').addEventListener('click', () => { if (workshopVisited && document.body.dataset.view === 'home') showWorkshop(); else openArtifacts(); });
-  $('sound-button').addEventListener('click', () => { save.sound = !save.sound; persist(); updateUI(); if (save.sound) sound('cut'); });
+  $('sound-button').addEventListener('click', toggleSound);
+  const mgSoundButton = $('mg-sound'); if (mgSoundButton) mgSoundButton.addEventListener('click', toggleSound);
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
   document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => { const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close(); }));
   window.addEventListener('keydown', e => {

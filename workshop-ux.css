@@ -1,4 +1,4 @@
-/* 玉见 v5.4 · 工坊 UX 修正
+﻿/* 玉见 v5.4 · 工坊 UX 修正
    1) 手机端步骤提示不再自动盖住画布，改成按需从底部弹出的说明页
    2) 切板后把尺寸控件滚进视野，确认按钮吸底
    3) 练习模式 / 结果页说明 */
@@ -13,6 +13,10 @@
   .plate-controls{scroll-margin-top:112px}
 }
 
+@media (max-width:950px){
+  .process-panel .quiet-button{display:inline-flex;align-items:center;gap:8px;margin:8px 0 2px;min-height:40px;padding:0 14px;font-size:10px;border:1px solid var(--line);border-radius:999px;background:#f7efdfb8}
+}
+
 #confirm-plate{position:sticky;bottom:8px;z-index:2}
 .plate-controls.attention{outline:2px solid #9d2b25;outline-offset:4px;animation:platePulse 1.1s ease-in-out 2}
 @keyframes platePulse{0%,100%{outline-color:#9d2b2500}50%{outline-color:#9d2b25}}
@@ -21,6 +25,12 @@
 .practice-toggle input{width:18px;height:18px;accent-color:var(--red);flex-shrink:0}
 .practice-toggle small{margin-left:auto;font-size:10px;color:var(--muted)}
 
+.mg-sound{width:38px;height:38px;min-width:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:#eadcc4;border:1px solid var(--line);color:#8a6f56;margin-left:2px;padding:0}
+.mg-sound .icon{width:16px;height:16px}
+.mg-sound[aria-pressed="true"]{background:var(--red);color:#fdf0d8;border-color:var(--red)}
+.mg-sound[aria-pressed="false"] .icon{opacity:.55}
+
 .result-stars.practice{font:500 12px/1.6 var(--sans);letter-spacing:1px;color:var(--red)}
 .result-note{margin:10px 0 0;font-size:11px;line-height:1.8;color:#8a6f56;text-align:center}
 .result-note[hidden]{display:none}
+
