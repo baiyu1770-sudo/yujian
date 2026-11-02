@@ -881,11 +881,21 @@
     if (!ready || !hints || !s || s.status !== 'playing' || dragging || busy || !$('step-tip').hidden) { el.hidden = true; return; }
     if (game.progress() > .015) { el.hidden = true; return; }
     const g = game.guide(); if (!g || g.length < 2) { el.hidden = true; return; }
-    const p0 = g[0]; let far = null, farD = 0;
+    let p0 = g[0], far = null, farD = 0;
+    /* 粗切是一条斜线：视觉上应从靠左上的那一端起手，而不是固定取 guide[0]。
+       否则右侧的“从这里起手”会落在料框右缘，和左上角的器形/文字对不上。 */
+    if (s.phase === 3 && g.length === 2) {
+      const a = g[0], b = g[1];
+      p0 = (a.x + a.y <= b.x + b.y) ? a : b;
+      far = (p0 === a) ? b : a;
+      farD = Math.hypot(far.x - p0.x, far.y - p0.y);
+    }
     /* 取「沿引导线走一段」的方向，而不是取最远的点，避免箭头斜飘 */
-    for (let i = 1; i < Math.min(9, g.length); i++) {
-      const d = Math.hypot(g[i].x - p0.x, g[i].y - p0.y);
-      if (d >= 24) { far = g[i]; farD = d; break; }
+    if (!far) {
+      for (let i = 1; i < Math.min(9, g.length); i++) {
+        const d = Math.hypot(g[i].x - p0.x, g[i].y - p0.y);
+        if (d >= 24) { far = g[i]; farD = d; break; }
+      }
     }
     if (!far) { const last = g[Math.min(8, g.length - 1)]; far = last; farD = Math.hypot(last.x - p0.x, last.y - p0.y); }
     if (!far || farD < 6) { el.hidden = true; return; }
