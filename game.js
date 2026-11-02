@@ -450,6 +450,7 @@
     $('assist-button').disabled = !ready || busy || dragging || s.status !== 'playing';
     $('undo-button').disabled = busy || dragging || game.historySize() === 0;
     $('hint-button').setAttribute('aria-pressed', String(hints));
+    const mgHint = $('mg-hint'); if (mgHint) mgHint.setAttribute('aria-pressed', String(hints));
     $('tool-icon').firstElementChild.setAttribute('href', '#i-' + spec.icon); $('tool-name').textContent = spec.tool;
     $('tool-hint').textContent = cutting ? '松手落刀 · 可以撤回' : '不设时限，慢慢完成';
     canvas.classList.toggle('polishing', [0, 6, 7].includes(s.phase));
@@ -1029,6 +1030,14 @@
     li.innerHTML = `<span class="step-index">${String(i + 1).padStart(2, '0')}</span><div><h2>${name}</h2><p>${descriptions[i]}</p></div><span class="step-state"></span>`; $('step-list').append(li);
   });
   $('hint-button').addEventListener('click', () => { hints = !hints; updateUI(); });
+  const mgHintButton = $('mg-hint'); if (mgHintButton) mgHintButton.addEventListener('click', () => $('hint-button').click());
+  $('target-help').addEventListener('click', () => {
+    if (!ready) { toast('正在准备玉料与图样…'); return; }
+    drawArtifact($('target-dialog-canvas'));
+    $('target-dialog-name').textContent = active.name; $('target-dialog-material').textContent = active.material;
+    $('target-dialog').showModal();
+  });
+  $('target-dialog-material').addEventListener('click', () => { $('target-dialog').close(); $('material-button').click(); });
   $('assist-button').addEventListener('click', () => {
     if (game.state.phase === 1 && game.state.sliced) {
       const pc = $('plate-controls');
