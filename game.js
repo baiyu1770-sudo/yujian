@@ -37,7 +37,10 @@
   let raf = 0, busy = false, demoFrame = 0, session = 0, toastTimer, flashTimer, resultTimer;
   let surface = null, surfaceKey = '', startedAt = Date.now(), finishedAt = 0, lastPreview = 0;
   let chips = [], audioContext, emitAcc = 0, palette = null;
+  const TOUCH = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  let guideCache = { key: '', pts: [] };
   let save = { records: {}, sound: false, lastLevel: 0 };
+  let practiceMode = false, firstCompletion = false;
   try {
     const data = JSON.parse(localStorage.getItem(STORE));
     if (data && typeof data.records === 'object' && data.records) save = { ...save, ...data };
@@ -435,8 +438,8 @@
     const rail = $('mg-rail');
     if (rail.children.length) [...rail.children].forEach((seg, i) => { seg.className = s.status === 'complete' || i < s.phase ? 'done' : i === s.phase ? 'current' : ''; });
     $('gesture-tip').textContent = spec.gesture;
-    $('assist-button').innerHTML = `${s.phase === 1 && s.sliced ? '请先确认玉板尺寸' : spec.assist} <svg class="icon"><use href="#i-arrow"/></svg>`;
-    $('assist-button').disabled = !ready || busy || dragging || s.status !== 'playing' || (s.phase === 1 && s.sliced);
+    $('assist-button').innerHTML = `${s.phase === 1 && s.sliced ? '去确认玉板尺寸' : spec.assist} <svg class="icon"><use href="#i-arrow"/></svg>`;
+    $('assist-button').disabled = !ready || busy || dragging || s.status !== 'playing';
     $('undo-button').disabled = busy || dragging || game.historySize() === 0;
     $('hint-button').setAttribute('aria-pressed', String(hints));
     $('tool-icon').firstElementChild.setAttribute('href', '#i-' + spec.icon); $('tool-name').textContent = spec.tool;
@@ -463,12 +466,14 @@
     placeCue();
     schedule();
   }
-  function startLevel(index) {
+  function startLevel(index, practice = false) {
+    practiceMode = !!practice;
     session++; clearTimeout(flashTimer); clearTimeout(resultTimer); cancelAnimationFrame(demoFrame);
     if (captured !== null && canvas.hasPointerCapture(captured)) canvas.releasePointerCapture(captured);
     captured = null; busy = dragging = false; path = []; hover = preview = null; chips = [];
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     game = W.createWorkshop(index); hints = game.level.hints; surfaceKey = ''; startedAt = Date.now(); finishedAt = 0; cueAnchor = null;
+    firstCompletion = !save.records[recordKey(active.id, index)];
     buildPalette(); emitAcc = 0;
     if (ready) { images.final = images[active.id + '-final']; prepareImages(); }
     $('stage-flash').classList.remove('show'); $('stage-flash').querySelector('span').textContent = ''; $('live-cut').textContent = '慢慢来，操作可以撤回'; $('live-cut').classList.remove('danger');
@@ -609,6 +614,13 @@
       clearTimeout(flashTimer); flashTimer = setTimeout(() => { $('stage-flash').classList.remove('show'); $('stage-flash').querySelector('span').textContent = ''; }, reduced ? 10 : 650);
     } else if (['cut', 'detail'].includes(result.kind)) sound('cut');
     updateUI();
+    if (result.kind === 'sliced') setTimeout(() => {
+      const pc = $('plate-controls');
+      if (!pc || pc.hidden) return;
+      pc.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      pc.classList.add('attention');
+      setTimeout(() => pc.classList.remove('attention'), 2400);
+    }, 280);
     if (result.kind === 'advance' || result.kind === 'sliced') requestAnimationFrame(() => {
       if (matchMedia('(max-width: 950px)').matches) scrollUnderBar(canvas.closest('.workbench'));
       else canvas.scrollIntoView({ block: 'center', behavior: 'instant' });
@@ -617,6 +629,26 @@
   function point(event) {
     const r = canvas.getBoundingClientRect(), v = view();
     return { x: ((event.clientX - r.left) * 600 / r.width - 300) / v.zoom + v.x, y: ((event.clientY - r.top) * 600 / r.height - 300) / v.zoom + v.y };
+  }
+  /* 磁吸：描形/画细节时，手指进入 18px（桌面 9px）内就吸附到最近的引导点。
+     这样手机上不用 2px 级精度，正常速度描过去就能推进；同时光标会贴着线走。 */
+  function guidePoints() {
+    const key = `${game.state.phase}:${game.state.sketchIndex || 0}`;
+    if (guideCache.key !== key) guideCache = { key, pts: game.guide() || [] };
+    return guideCache.pts;
+  }
+  function snapPoint(p) {
+    if (!game || ![2, 4].includes(game.state.phase)) return p;
+    const r = canvas.getBoundingClientRect();
+    if (!r.width) return p;
+    const snapCss = TOUCH ? 18 : 9;
+    const world = snapCss * 600 / (r.width * Math.max(.2, view().zoom));
+    let best = p, bd = world;
+    for (const g of guidePoints()) {
+      const d = E.distance(g, p);
+      if (d < bd) { bd = d; best = g; }
+    }
+    return best;
   }
   function clearStroke() {
     const pointer = captured; captured = null; dragging = false;
@@ -632,11 +664,11 @@
   canvas.addEventListener('pointerdown', event => {
     if (!ready || busy || dragging || game.state.status !== 'playing' || event.button !== 0) return;
     event.preventDefault(); canvas.focus({ preventScroll: true }); hideStepTip(); dragging = true; captured = event.pointerId; canvas.setPointerCapture(captured);
-    strokePhase = game.state.phase; path = [point(event)]; hover = path[0]; preview = null;
+    strokePhase = game.state.phase; path = [snapPoint(point(event))]; hover = path[0]; preview = null;
     game.begin(); if ([0, 2, 4, 6, 7].includes(strokePhase)) game.paint(path); updateUI();
   });
   canvas.addEventListener('pointermove', event => {
-    const p = point(event); hover = p;
+    const p = snapPoint(point(event)); hover = p;
     if (dragging && event.pointerId === captured && E.distance(path[path.length - 1], p) > 1) {
       const previous = path[path.length - 1]; path.push(p);
       emitMotion(strokePhase, previous, p);
@@ -647,7 +679,7 @@
   });
   canvas.addEventListener('pointerup', event => {
     if (!dragging || event.pointerId !== captured) return;
-    const p = point(event), last = path[path.length - 1]; path.push(p);
+    const p = snapPoint(point(event)), last = path[path.length - 1]; path.push(p);
     const brush = [0, 2, 4, 6, 7].includes(strokePhase), phase = strokePhase;
     let result;
     if (brush) { game.paint([last, p]); result = game.end(); }
@@ -691,8 +723,16 @@
     surfaceKey = ''; chips = []; emitAcc = 0; hover = null; $('live-cut').textContent = '已回到上一次操作之前'; $('live-cut').classList.remove('danger'); updateUI();
     canvas.scrollIntoView({ block: 'center', behavior: 'instant' }); toast('已撤回上一步，可以继续。');
   }
-  function stars() { return game.state.assist > 2 ? 1 : game.state.assist > 0 || game.cutter.state.totalCuts > 4 + E.OPENINGS.length + E.DETAILS.length ? 2 : 3; }
+  function stars() {
+    if (practiceMode) return 0;
+    if (firstCompletion) return 3;
+    const extra = game.cutter.state.totalCuts > 4 + E.OPENINGS.length + E.DETAILS.length;
+    if (game.state.assist > 8) return 1;
+    if (game.state.assist > 0 || extra) return 2;
+    return 3;
+  }
   function saveCompletion() {
+    if (practiceMode) return;
     const key = recordKey(), old = save.records[key], elapsed = Math.max(1, Math.round((finishedAt - startedAt) / 1000));
     save.records[key] = { stars: Math.max(Number(old?.stars) || 0, stars()), cuts: Math.min(Number(old?.cuts) || Infinity, game.cutter.state.totalCuts + 1), seconds: Math.min(Number(old?.seconds) || Infinity, elapsed), thickness: game.state.dimensions.thickness };
     persist();
@@ -704,11 +744,29 @@
       $('failure-reason').textContent = game.state.reason;
       $('undo-result').addEventListener('click', undo); $('retry-result').addEventListener('click', () => startLevel(game.state.levelIndex)); $('review-result').addEventListener('click', () => dialog.close());
     } else {
-      $('result-content').innerHTML = '<div class="eyebrow">FROM YOUR HANDS, A JADE IS BORN</div><h2>慢慢琢，终于成器。</h2><canvas class="result-art" id="result-art" width="480" height="430"></canvas><div class="result-stars" id="result-stars"></div><p class="result-description" id="success-description"></p><div class="result-stats"><div><strong id="result-cuts"></strong><span>切片与雕琢</span></div><div><strong id="result-time"></strong><span>手作用时</span></div><div><strong id="result-assisted"></strong><span>示范次数</span></div></div><button class="primary-button" id="collect-result">已收入图鉴 · 去看看</button><button class="text-button" id="next-result">再试一方玉 · 下一档难度</button><button class="text-button" id="review-result">回到工坊，欣赏成品</button>';
-      drawArtifact($('result-art')); $('result-stars').textContent = starsText(stars()) + '☆'.repeat(3 - stars());
+      const practice = practiceMode;
+      const note = practice ? '练习模式 · 本次不计入图鉴，可以随时重来。' : firstCompletion ? '首次完成 · 不扣提示星，已收入图鉴。' : '';
+      const actions = practice
+        ? '<button class="primary-button" id="collect-result">再练一次</button><button class="text-button" id="next-result">换一档难度</button><button class="text-button" id="review-result">回到工坊，看看这一件</button>'
+        : '<button class="primary-button" id="collect-result">已收入图鉴 · 去看看</button><button class="text-button" id="next-result">再试一方玉 · 下一档难度</button><button class="text-button" id="review-result">回到工坊，欣赏成品</button>';
+      $('result-content').innerHTML = '<div class="eyebrow">FROM YOUR HANDS, A JADE IS BORN</div><h2>慢慢琢，终于成器。</h2><canvas class="result-art" id="result-art" width="480" height="430"></canvas><div class="result-stars" id="result-stars"></div><p class="result-description" id="success-description"></p><p class="result-note" id="result-note" hidden></p><div class="result-stats"><div><strong id="result-cuts"></strong><span>切片与雕琢</span></div><div><strong id="result-time"></strong><span>手作用时</span></div><div><strong id="result-assisted"></strong><span>提示次数</span></div></div>' + actions;
+      drawArtifact($('result-art'));
+      if (practice) {
+        $('result-stars').textContent = '练习完成 · 不计星';
+        $('result-stars').classList.add('practice');
+      } else {
+        $('result-stars').textContent = starsText(stars()) + '☆'.repeat(3 - stars());
+        $('result-stars').classList.remove('practice');
+      }
+      if (note) { $('result-note').hidden = false; $('result-note').textContent = note; }
       $('success-description').textContent = `${active.name} · ${active.material}。从磨皮到抛光，八道工序已完成，厚度比例 ${game.state.dimensions.thickness}。`;
       $('result-cuts').textContent = game.cutter.state.totalCuts + 1 + ' 刀'; $('result-time').textContent = Math.max(1, Math.round((finishedAt - startedAt) / 1000)) + ' 秒'; $('result-assisted').textContent = game.state.assist + ' 次';
-      $('collect-result').addEventListener('click', () => { dialog.close(); openCollection(); }); $('next-result').addEventListener('click', () => startLevel((game.state.levelIndex + 1) % E.LEVELS.length)); $('review-result').addEventListener('click', () => dialog.close());
+      $('collect-result').addEventListener('click', () => {
+        if (practice) { startLevel(game.state.levelIndex, true); return; }
+        dialog.close(); openCollection();
+      });
+      $('next-result').addEventListener('click', () => startLevel((game.state.levelIndex + 1) % E.LEVELS.length, practiceMode));
+      $('review-result').addEventListener('click', () => dialog.close());
     }
     dialog.showModal();
   }
@@ -718,8 +776,8 @@
       const button = document.createElement('button'); button.className = 'level-choice' + (index === game.state.levelIndex ? ' selected' : '');
       button.innerHTML = `<span class="choice-num">${numerals[index]}</span><span><strong>${level.name}</strong><small>粗切 ${level.budgets[0]} 刀 · 开孔 ${level.budgets[1]} 刀 · 琢纹 ${level.budgets[2]} 刀</small></span><span class="choice-stars"></span>`;
       const record = save.records[recordKey(active.id, index)]; button.querySelector('.choice-stars').textContent = record ? starsText(record.stars) : '未琢';
-      button.addEventListener('click', () => startLevel(index)); $('level-list').append(button);
-    }); $('level-dialog').showModal();
+      button.addEventListener('click', () => startLevel(index, $('practice-toggle').checked)); $('level-list').append(button);
+    }); $('practice-toggle').checked = practiceMode; $('level-dialog').showModal();
   }
   function openCollection() {
     $('collection-grid').replaceChildren();
@@ -784,6 +842,7 @@
     if (!ready || !game || game.state.status !== 'playing') return;
     if (document.body.dataset.view !== 'workshop') return;
     if (coachPending || !$('coach').hidden) return;
+    if (!force && matchMedia('(max-width:700px)').matches) return;
     if (!force && tipsSeen.includes(game.state.phase)) return;
     fillTip();
     $('step-tip').hidden = false; $('tip-help').setAttribute('aria-expanded', 'true');
@@ -872,7 +931,7 @@
   function finishCoach() {
     $('coach').hidden = true; coachSeen = true; coachPending = false;
     if (document.body.dataset.view === 'workshop') scrollUnderBar(canvas.closest('.workbench'));
-    setTimeout(() => showStepTip(true), 260);
+    if (!matchMedia('(max-width:700px)').matches) setTimeout(() => showStepTip(true), 260);
     try { localStorage.setItem(COACH_KEY, '1'); } catch (_) { /* 隐私模式下不记忆 */ }
   }
   function maybeCoach() {
@@ -935,7 +994,19 @@
     li.innerHTML = `<span class="step-index">${String(i + 1).padStart(2, '0')}</span><div><h2>${name}</h2><p>${descriptions[i]}</p></div><span class="step-state"></span>`; $('step-list').append(li);
   });
   $('hint-button').addEventListener('click', () => { hints = !hints; updateUI(); });
-  $('assist-button').addEventListener('click', demonstrate); $('undo-button').addEventListener('click', undo);
+  $('assist-button').addEventListener('click', () => {
+    if (game.state.phase === 1 && game.state.sliced) {
+      const pc = $('plate-controls');
+      if (pc && !pc.hidden) {
+        pc.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        pc.classList.add('attention');
+        setTimeout(() => pc.classList.remove('attention'), 2000);
+        $('plate-length').focus({ preventScroll: true });
+      }
+      return;
+    }
+    demonstrate();
+  }); $('undo-button').addEventListener('click', undo);
   $('restart-button').addEventListener('click', () => startLevel(game.state.levelIndex));
   $('confirm-plate').addEventListener('click', () => feedback(game.confirmPlate(), 1));
   for (const key of ['length', 'width', 'thickness']) {
