@@ -36,15 +36,18 @@
   let dragging = false, captured = null, path = [], hover = null, preview = null, strokePhase = 0;
   let raf = 0, busy = false, demoFrame = 0, session = 0, toastTimer, flashTimer, resultTimer;
   let surface = null, surfaceKey = '', startedAt = Date.now(), finishedAt = 0, lastPreview = 0;
-  let chips = [], audioContext, emitAcc = 0, palette = null;
+  let chips = [], audioContext, audioMaster, audioCompressor, noiseBuffer, emitAcc = 0, palette = null;
   const TOUCH = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
   let guideCache = { key: '', pts: [] };
-  let save = { records: {}, sound: true, lastLevel: 0 };
+  let save = { records: {}, sound: true, soundChoice: false, lastLevel: 0 };
   let practiceMode = false, firstCompletion = false, runFlaws = 0;
   try {
     const data = JSON.parse(localStorage.getItem(STORE));
     if (data && typeof data.records === 'object' && data.records) save = { ...save, ...data };
   } catch (_) { /* File and private contexts may deny storage; the game remains playable. */ }
+  /* v5.9: 旧存档没有 soundChoice，sound:false 只是旧版本的默认值，不是玩家主动关闭。
+     迁移为默认开；玩家真正点过开关后才会写入 soundChoice。 */
+  if (!save.soundChoice) save.sound = true;
   const starsText = n => '★'.repeat(Math.max(0, Math.min(3, Number(n) || 0)));
   const recordKey = (id = active.id, index = game?.state.levelIndex || 0) => id === 'dragon' ? String(index) : id + ':' + index;
   function persist() {
@@ -55,28 +58,88 @@
     clearTimeout(toastTimer); $('toast').textContent = text; $('toast').classList.add('show');
     toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3200);
   }
-  function sound(type) {
+  function unlockAudio() {
     if (!save.sound) return;
     try {
       audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
       if (audioContext.state === 'suspended') audioContext.resume();
-      const now = audioContext.currentTime;
-      const notes = type === 'advance' ? [659, 880] : type === 'complete' ? [523, 659, 784, 1046] : type === 'failed' ? [143, 107] : [1400];
-      notes.forEach((frequency, i) => {
-        const osc = audioContext.createOscillator(), gain = audioContext.createGain();
-        osc.type = type === 'failed' ? 'triangle' : 'sine'; osc.frequency.value = frequency;
-        gain.gain.setValueAtTime(0, now + i * .08); gain.gain.linearRampToValueAtTime(.035, now + i * .08 + .01); gain.gain.exponentialRampToValueAtTime(.0001, now + i * .08 + .55);
-        osc.connect(gain).connect(audioContext.destination); osc.start(now + i * .08); osc.stop(now + i * .08 + .6);
-      });
+      /* iOS 需要在用户手势里真正播过一个 buffer 才肯解锁；这里播一个 1 帧静音。 */
+      if (!audioContext.__primed) {
+        const buffer = audioContext.createBuffer(1, 1, 22050);
+        const src = audioContext.createBufferSource();
+        src.buffer = buffer; src.connect(audioContext.destination); src.start(0);
+        audioContext.__primed = true;
+      }
     } catch (_) { /* Audio is optional. */ }
   }
+  function audioChain() {
+    if (!audioContext) return null;
+    if (!audioMaster) {
+      audioCompressor = audioContext.createDynamicsCompressor();
+      audioCompressor.threshold.value = -20; audioCompressor.knee.value = 16;
+      audioCompressor.ratio.value = 4; audioCompressor.attack.value = .004; audioCompressor.release.value = .25;
+      audioMaster = audioContext.createGain(); audioMaster.gain.value = .9;
+      audioMaster.connect(audioCompressor).connect(audioContext.destination);
+    }
+    return audioMaster;
+  }
+  function playTone(freqs, wave, level, dur) {
+    const master = audioChain(); if (!master) return;
+    const now = audioContext.currentTime, step = freqs.length > 2 ? .1 : .08;
+    freqs.forEach((frequency, i) => {
+      const osc = audioContext.createOscillator(), gain = audioContext.createGain();
+      osc.type = wave; osc.frequency.value = frequency;
+      const t = now + i * step;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(level, t + .012);
+      gain.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      osc.connect(gain).connect(master);
+      osc.start(t); osc.stop(t + dur + .02);
+    });
+  }
+  function noiseBurst(dur, freq, level) {
+    const master = audioChain(); if (!master) return;
+    const now = audioContext.currentTime;
+    if (!noiseBuffer) {
+      const len = Math.max(1, Math.floor(audioContext.sampleRate * .2));
+      noiseBuffer = audioContext.createBuffer(1, len, audioContext.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    }
+    const src = audioContext.createBufferSource(); src.buffer = noiseBuffer;
+    const filter = audioContext.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = freq; filter.Q.value = .8;
+    const gain = audioContext.createGain();
+    gain.gain.setValueAtTime(level, now); gain.gain.exponentialRampToValueAtTime(.0001, now + dur);
+    src.connect(filter).connect(gain).connect(master);
+    src.start(now); src.stop(now + dur + .02);
+  }
+  function playSound(type) {
+    if (!audioContext || !audioChain()) return;
+    if (type === 'paint') { noiseBurst(.055, 1500, .08); return; }
+    if (type === 'cut' || type === 'detail') { noiseBurst(.1, 900, .13); playTone([150], 'triangle', .05, .14); return; }
+    if (type === 'failed') { playTone([143, 107], 'triangle', .2, .5); return; }
+    const notes = type === 'advance' ? [659, 880] : type === 'complete' ? [523, 659, 784, 1046] : [880];
+    playTone(notes, 'sine', type === 'complete' ? .15 : .16, type === 'complete' ? .8 : .45);
+  }
+  function sound(type) {
+    if (!save.sound) return;
+    unlockAudio();
+    if (!audioContext) return;
+    if (audioContext.state === 'suspended') audioContext.resume().then(() => playSound(type)).catch(() => {});
+    else playSound(type);
+  }
   function haptic(pattern) {
-    if (!TOUCH || !navigator.vibrate) return;
-    try { navigator.vibrate(pattern); } catch (_) { /* Haptics are optional. */ }
+    if (!TOUCH) return;
+    if (navigator.vibrate) { try { if (navigator.vibrate(pattern)) return; } catch (_) { /* Optional. */ } }
+    /* iPhone Safari 没有 Vibration API：用一圈很轻的画面脉冲代替，至少让手上有反馈。 */
+    const wrap = document.querySelector('.canvas-wrap'); if (!wrap) return;
+    wrap.classList.remove('haptic-pulse'); void wrap.offsetWidth; wrap.classList.add('haptic-pulse');
+    setTimeout(() => wrap.classList.remove('haptic-pulse'), 220);
   }
   function toggleSound() {
-    save.sound = !save.sound; persist(); updateUI();
-    if (save.sound) sound('cut');
+    save.sound = !save.sound; save.soundChoice = true; persist(); updateUI();
+    if (save.sound) { unlockAudio(); sound('cut'); toast('音效已开。手机震动需要系统支持。'); }
+    else toast('音效已关。');
   }
   /* ————————————— 碎屑粒子 —————————————
      磨皮与切片是两种完全不同的去除：磨是「把石皮搓成粉」，粉细、轻、贴着手往下簌簌落；
@@ -434,7 +497,7 @@
     $('instruction-index').textContent = `第${words[s.phase]}道 · ${W.PHASES[s.phase]}`;
     $('instruction-title').textContent = s.status === 'complete' ? '玉已成器，收入图鉴' : spec.title;
     $('instruction-text').textContent = s.status === 'complete' ? '从磨皮到抛光，你已经走完八道工序。可以在图鉴欣赏，也可以再试一种难度。' : spec.text;
-    const boardText = loadError || (!ready ? '正在准备原石与阶段素材…' : s.status === 'failed' ? '玉料已报废 · 可以撤回刚才的一刀' : s.status === 'complete' ? '温润成器 · 已收入本机图鉴' : spec.message);
+    const boardText = loadError || (!ready ? '正在准备原石与阶段素材…' : s.status === 'failed' ? '这一刀留了痕 · 可以补救' : s.status === 'complete' ? '温润成器 · 已收入本机图鉴' : spec.message);
     $('board-message-text').textContent = boardText;
     $('mg-step').textContent = String(s.phase + 1).padStart(2, '0');
     $('mg-name').textContent = W.PHASES[s.phase];
@@ -616,16 +679,16 @@
     $('live-cut').textContent = result.kind === 'failed' ? '这一刀留了痕 · 可以补救' : result.kind === 'complete' ? '温润成器 · 已收入图鉴' : result.kind === 'cut' ? (result.cuts ? `${result.name}已切 · ${result.cuts} / 4 刀` : '这一刀已落下 · 可以撤回') : result.kind === 'paint' ? '这一笔已留下 · 可以撤回' : '这一笔已完成 · 可以撤回';
     if (result.kind === 'failed' || result.kind === 'complete') {
       if (result.kind === 'failed') runFlaws++;
-      sound(result.kind); haptic(result.kind === 'failed' ? [18, 40, 18] : [12, 45, 12, 45, 24]); finishedAt = Date.now();
+      sound(result.kind); haptic(result.kind === 'failed' ? [40, 60, 40] : [30, 60, 30, 60, 45]); finishedAt = Date.now();
       if (result.kind === 'complete') saveCompletion();
       const token = session; clearTimeout(resultTimer);
       resultTimer = setTimeout(() => { if (session === token && game.state.status === (result.kind === 'failed' ? 'failed' : 'complete')) showResult(); }, reduced ? 0 : 420);
     } else if (result.kind === 'advance' || result.kind === 'sliced') {
-      sound('advance'); haptic(10); const name = game.state.phase !== oldPhase ? W.PHASES[oldPhase] + '完成' : result.kind === 'sliced' ? '玉板已切出' : '这一笔完成';
+      sound('advance'); haptic(35); const name = game.state.phase !== oldPhase ? W.PHASES[oldPhase] + '完成' : result.kind === 'sliced' ? '玉板已切出' : '这一笔完成';
       $('stage-flash').querySelector('span').textContent = name; $('stage-flash').classList.add('show');
       clearTimeout(flashTimer); flashTimer = setTimeout(() => { $('stage-flash').classList.remove('show'); $('stage-flash').querySelector('span').textContent = ''; }, reduced ? 10 : 650);
-    } else if (['cut', 'detail'].includes(result.kind)) { sound('cut'); haptic(8); }
-    else if (result.kind === 'paint') haptic(4);
+    } else if (['cut', 'detail'].includes(result.kind)) { sound('cut'); haptic(30); }
+    else if (result.kind === 'paint') { sound('paint'); haptic(24); }
     updateUI();
     if (result.kind === 'sliced') setTimeout(() => {
       const pc = $('plate-controls');
@@ -925,7 +988,7 @@
   const coachSteps = [
     { target: '#canvas-wrap', scroll: '.workbench', title: '这里就是玉料', text: '按住拖动，磨过、擦过的地方才会起变化。松手就算完成这一笔，不满意随时撤回。' },
     { target: '#mobile-guide', title: '看这一条就够了', text: '第几步、这一步要做什么、完成到多少，都写在这里。点这一条可以展开本步的详细解说。' },
-    { target: '#undo-button', title: '做错不用重来', text: '撤回上一步，不影响星级。只有同一块玉上连续下错刀，玉料才会报废。' }
+    { target: '#undo-button', title: '做错不用重来', text: '撤回上一步，不影响星级。补过的石痕会留在这一件上，不会报废。' }
   ];
   let coachIndex = 0;
   function barOffset() {
@@ -1063,6 +1126,7 @@
   $('choose-artifact-button').addEventListener('click', () => { if (workshopVisited && document.body.dataset.view === 'home') showWorkshop(); else openArtifacts(); });
   $('sound-button').addEventListener('click', toggleSound);
   const mgSoundButton = $('mg-sound'); if (mgSoundButton) mgSoundButton.addEventListener('click', toggleSound);
+  ['pointerdown', 'touchstart', 'keydown'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
   document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => { const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close(); }));
   window.addEventListener('keydown', e => {

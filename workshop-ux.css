@@ -68,3 +68,7 @@
 .target-dialog .secondary-button{width:100%;justify-content:center;margin-bottom:8px}
 .target-dialog .primary-button{width:100%;justify-content:center}
 
+/* iPhone 没有 Vibration API 时的画面脉冲替代 */
+@keyframes hapticFrame{35%{box-shadow:inset 0 0 0 3px #b04f3755}}
+.canvas-wrap.haptic-pulse{animation:hapticFrame .2s ease-out}
+
