@@ -1,0 +1,325 @@
+/* ==========================================================================
+   常驻二维码 · 滚动提示 · 回到顶部
+   2026-11-08 追加。只作用于下面四个新部件，不修改任何既有选择器。
+   部件：.corner-qr（右上/右下的常驻二维码）、.qr-modal（放大浮层）、
+        .scroll-hint（首页首屏下沿的滚动提示）、.to-top（回到顶部）
+   ========================================================================== */
+
+/* ---------- A. 常驻二维码 ------------------------------------------------ */
+
+.corner-qr {
+  position: fixed;
+  top: 104px;            /* header.site-header 高 94px，留 10px 呼吸 */
+  right: 24px;
+  z-index: 60;           /* 高于 body:before 噪点(20)、header(15)、mobile-guide(40)，低于 toast(100) */
+  transition: top .3s ease, bottom .3s ease;
+}
+
+.corner-qr__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 8px 7px;
+  background: #fffdf7;   /* 暖白：与站点同色系，同时给二维码足量 quiet zone */
+  border: 1px solid #ddc7a5;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 #dcc4a3, 0 10px 22px #6b4a2d24, inset 0 1px 0 #fff;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.corner-qr__btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 0 #d7bd9a, 0 14px 26px #6b4a2d2e, inset 0 1px 0 #fff;
+}
+
+.corner-qr__img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  background: #fff;
+  border-radius: 2px;
+}
+
+.corner-qr__label {
+  font-family: var(--sans);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 2px;
+  text-indent: 2px;      /* 抵消末字后的字距，视觉居中 */
+  color: #8b6a4a;
+  white-space: nowrap;
+}
+
+/* 工坊页右上角被「难度选择」占用，> 1500px 仍挂右下角 */
+body[data-view="workshop"] .corner-qr {
+  top: auto;
+  bottom: 22px;
+}
+
+/* 1051–1651px：右栏右缘 = 视口/2 + 688，固定卡左缘 = 视口 − 138，
+   只有视口 ≥ 1652px 两者才不相交（1920 投影属于这一档，实测零重叠）。
+   在没有右侧留白的宽度里，固定浮层无论挂哪个角都必然压字（左下是「八道玉作」列表，
+   右下是说明卡正文）。所以这一档改用「栏内二维码」：放进右栏最下方，
+   随页面滚动，靠版式而不是靠遮挡来让路。 */
+.qr-dock {
+  display: none;
+}
+
+@media (min-width: 1051px) and (max-width: 1651px) {
+  body[data-view="workshop"] .corner-qr {
+    display: none;
+  }
+
+  body[data-view="workshop"] .qr-dock {
+    display: block;
+    margin-top: 20px;
+  }
+
+  .qr-dock .corner-qr__btn {
+    width: 100%;
+    padding: 12px 8px 10px;
+  }
+
+  .qr-dock .corner-qr__img {
+    width: 80px;
+    height: 80px;
+  }
+}
+
+/* 手机 / 平板：本身就在手上玩，浮层反而挡屏；1050px 也是站点切上下堆叠的断点 */
+@media (max-width: 1050px) {
+  .corner-qr {
+    display: none;
+  }
+}
+
+/* ---------- A2. 点开的大图浮层 ------------------------------------------ */
+
+.qr-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;          /* 站内 <dialog> 在 top layer，天然在其之上 */
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.qr-modal[hidden] {
+  display: none;
+}
+
+.qr-modal__veil {
+  position: absolute;
+  inset: 0;
+  background: #38291f8f;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.qr-modal__panel {
+  position: relative;
+  width: 360px;
+  max-width: 100%;
+  padding: 26px 26px 22px;
+  text-align: center;
+  background: #fdf8ee;
+  border: 2px solid #cbae86;
+  border-radius: 26px;
+  box-shadow: 0 8px 0 #00000008, 0 34px 70px #2b1c1426, inset 0 1px 0 #fffaee;
+  animation: qr-in .22s ease-out both;
+}
+
+@keyframes qr-in {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.qr-modal__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  line-height: 1;
+  color: #a38869;
+  border-radius: 50%;
+}
+
+.qr-modal__close:hover {
+  color: var(--red);
+  background: #efe0c8;
+}
+
+.qr-modal__kicker {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--red);
+}
+
+.qr-modal__title {
+  margin: 10px 0 16px;
+  font: 400 23px/1.6 var(--display);
+  letter-spacing: 1px;
+  color: #69432f;
+}
+
+.qr-modal__img {
+  display: block;
+  width: 260px;
+  height: 260px;
+  margin: 0 auto;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e2cdae;
+  border-radius: 4px;
+}
+
+.qr-modal__url {
+  margin: 12px 0 16px;
+  font: 11px/1.7 Georgia, serif;
+  letter-spacing: .5px;
+  color: #a08a70;
+  word-break: break-all;
+}
+
+.qr-modal__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 12px 22px;
+  font-size: 12px;
+  color: var(--light);
+  background: linear-gradient(180deg, #ab4a34, #983f2c);
+  border: 1.5px solid #8b3826;
+  border-radius: 16px 13px 17px 12px;
+  box-shadow: 0 3px 0 #7b3322, inset 0 1px 0 #ffffff30;
+}
+
+.qr-modal__link:hover {
+  background: linear-gradient(180deg, #9b4029, #8a3524);
+}
+
+@media (max-width: 420px) {
+  .qr-modal__panel { padding: 22px 18px 18px; }
+  .qr-modal__title { font-size: 20px; }
+  .qr-modal__img { width: 220px; height: 220px; }
+}
+
+/* ---------- B. 首屏下沿的滚动提示 --------------------------------------- */
+
+.scroll-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 2px 0 21px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #8e7358;
+  transition: opacity .35s ease, transform .35s ease;
+}
+
+.scroll-hint svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: hint-bob 2.4s ease-in-out infinite;
+}
+
+@keyframes hint-bob {
+  0%, 100% { transform: translateY(0); opacity: .6; }
+  50%      { transform: translateY(4px); opacity: 1; }
+}
+
+.scroll-hint.is-hidden {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+
+/* 手机上首屏只有文字、大图在下，提示会落到第二屏，反而多余 */
+@media (max-width: 1050px) {
+  .scroll-hint {
+    display: none;
+  }
+}
+
+/* ---------- C. 回到顶部 -------------------------------------------------- */
+
+.to-top {
+  position: fixed;
+  left: 12px;
+  bottom: 20px;
+  z-index: 60;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  background: #fffdf7;
+  border: 1px solid #ddc7a5;
+  border-radius: 50%;
+  color: #8b6a4a;
+  box-shadow: 0 2px 0 #dcc4a3, 0 8px 18px #6b4a2d1f;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: opacity .25s ease, transform .25s ease, visibility .25s;
+}
+
+.to-top.is-on {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+.to-top:hover {
+  color: var(--red);
+  background: #fff;
+}
+
+.to-top svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 720px) {
+  .to-top {
+    left: auto;
+    right: 14px;
+    bottom: 14px;
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ---------- 动效偏好 ---------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .corner-qr,
+  .corner-qr__btn,
+  .scroll-hint,
+  .scroll-hint svg,
+  .to-top {
+    transition: none;
+    animation: none;
+  }
+  .qr-modal__panel {
+    animation: none;
+  }
+}

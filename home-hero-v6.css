@@ -1,0 +1,105 @@
+﻿/* 玉见 v6 · 首屏
+   1) 字号：主标题 96–120px（桌面最大 96，受正文栏宽限制）/ 正文 24px / 注释 20px / 行距 1.5
+   2) 主图换成 assets/hero-art-v3.webp（五器同席 · 方图），整幅不裁切
+   加载在 hongshan.css、hero-transition.css、workshop-ux.css 之后，只覆盖首页首屏。 */
+
+/* ---------- 桌面两栏（≥1051px） ---------- */
+@media (min-width:1051px){
+  .hongshan-hero{display:block;position:relative;padding:40px 0 34px;min-height:0}
+
+  /* 文字栏 52%：留给 7 字标题（96px × 7 + 字距）刚好不折行 */
+  .hero-copy{width:52%;padding:6px 0 4px}
+
+  /* 主标题：桌面 96px（120 需整幅通栏，本版取 96） */
+  .hero-copy h1{font:500 96px/1.15 var(--display);letter-spacing:2px;margin:26px 0 28px}
+  .hero-copy h1 em:after{bottom:-10px;height:6px;left:3px;right:9px;opacity:.34}
+
+  /* 小标（注释级以上的引导标） */
+  .hero-copy>.eyebrow{font-size:16px;letter-spacing:1.6px}
+
+  /* 正文 24px / 行距 1.5 */
+  .hero-description{font-size:24px;line-height:1.5;letter-spacing:.4px;color:#7a6653;margin:0 0 34px}
+
+  /* 按钮与链接跟随正文字号，避免层级断裂 */
+  .hero-actions{gap:26px}
+  .hero-actions .primary-button{font-size:20px;line-height:1.5;padding:18px 30px;gap:22px}
+  .hero-actions .primary-button .icon{width:20px;height:20px}
+  .hero-actions .story-link{font-size:20px;line-height:1.5;gap:12px}
+
+  /* 注释 20px / 行距 1.5 */
+  .hero-footnote{font-size:20px;line-height:1.5;gap:14px;margin-top:34px;color:#8d7863}
+  .hero-footnote i{height:5px;width:5px}
+
+  /* 主图：右侧整幅展示，按原图比例不裁切 */
+  .hero-landscape{position:absolute;right:0;top:50%;bottom:auto;transform:translateY(-50%);
+    width:min(46%,660px);height:auto;aspect-ratio:1402/1122;min-height:0;
+    margin:0;border-radius:20px;overflow:hidden;
+    box-shadow:0 2px 0 #c08b57,0 24px 48px #6b3a1f2b,inset 0 0 0 1px #ffffff1f}
+  .hero-landscape::after{display:none}
+  .hero-landscape .mural-art{position:absolute;inset:0;width:100%;height:100%;
+    object-fit:cover;object-position:50% 50%;mix-blend-mode:multiply;
+    -webkit-mask-image:none;mask-image:none;opacity:1}
+}
+
+/* 1401–1600：主标题仍 96px，图略收 */
+@media (min-width:1401px){
+  .hero-landscape{width:min(46%,660px)}
+}
+
+/* 1201–1400：标题 88px */
+@media (min-width:1201px) and (max-width:1400px){
+  .hero-copy h1{font-size:88px}
+  .hero-copy{width:53%}
+  .hero-landscape{width:45%}
+  .hero-description{font-size:22px}
+  .hero-footnote{font-size:18px}
+}
+
+/* 1051–1200：标题 80px，正文 20px */
+@media (min-width:1051px) and (max-width:1200px){
+  .hero-copy h1{font-size:80px;letter-spacing:1.5px}
+  .hero-copy{width:55%}
+  .hero-landscape{width:43%}
+  .hero-description{font-size:20px}
+  .hero-actions .primary-button,.hero-actions .story-link{font-size:17px}
+  .hero-footnote{font-size:16px}
+}
+
+/* ---------- 平板：上下堆叠（701–1050px） ---------- */
+@media (min-width:701px) and (max-width:1050px){
+  .hero-copy{width:100%;padding:6px 0 8px}
+  .hero-copy h1{font-size:64px;line-height:1.16;letter-spacing:1.5px;margin:22px 0 24px}
+  .hero-description{font-size:19px;line-height:1.5;margin:0 0 26px}
+  .hero-actions .primary-button,.hero-actions .story-link{font-size:16px;line-height:1.5}
+  .hero-footnote{font-size:15px;line-height:1.5;margin-top:24px}
+  .hero-landscape{position:relative;top:auto;right:auto;bottom:auto;transform:none;
+    width:100%;height:auto;aspect-ratio:1402/1122;min-height:0;margin:14px 0 0;
+    border-radius:18px;overflow:hidden;box-shadow:0 2px 0 #c08b57,0 18px 36px #6b3a1f26}
+  .hero-landscape::after{display:none}
+  .hero-landscape .mural-art{position:absolute;inset:0;width:100%;height:100%;
+    object-fit:cover;object-position:50% 50%;mix-blend-mode:multiply;
+    -webkit-mask-image:none;mask-image:none;opacity:1}
+}
+
+/* ---------- 手机（≤700px） ---------- */
+@media (max-width:700px){
+  .hero-copy h1{font-size:clamp(38px,10.4vw,46px);line-height:1.2;letter-spacing:1.5px;margin:18px 0 20px}
+  .hero-description{font-size:16px;line-height:1.5;letter-spacing:.2px;margin:0 0 22px}
+  .hero-actions .primary-button{font-size:14px;line-height:1.5}
+  .hero-actions .story-link{font-size:14px;line-height:1.5}
+  .hero-footnote{font-size:13px;line-height:1.5;gap:9px;margin-top:20px}
+  .hero-landscape{position:relative;top:auto;right:auto;bottom:auto;transform:none;
+    width:100%;height:auto;aspect-ratio:1402/1122;min-height:0;margin:10px 0 0;
+    border-radius:16px;overflow:hidden;box-shadow:0 2px 0 #c08b57,0 14px 28px #6b3a1f24}
+  .hero-landscape::after{display:none}
+  .hero-landscape .mural-art{position:absolute;inset:0;width:100%;height:100%;
+    object-fit:cover;object-position:50% 50%;mix-blend-mode:multiply;
+    -webkit-mask-image:none;mask-image:none;opacity:1}
+}
+
+@media (max-width:370px){
+  .hero-copy h1{font-size:34px}
+  .hero-description{font-size:15px}
+  .hero-footnote{font-size:12px}
+}
+

@@ -1,0 +1,205 @@
+/* 玉见 v6 · 工坊字号
+   原则（按用户的话）：这一步"是什么、要怎么动手"的字，必须一眼看清；
+   辅助性的话（不设时限、慢慢来、可撤回）反而要往后退，别抢视线。
+
+   A 级 · 动作指令（最大）
+     #gesture-tip 按住擦拭 / 松手完成  ·  .board-message  ·  .tip-line  ·  .mg-action
+   B 级 · 步骤身份与操作（明确）
+     #bench-phase 磨皮 / REVEAL  ·  #tool-name 磨皮石  ·  .step h2  ·  示范/撤回  ·  器物名
+   C 级 · 辅助注释（保持小）
+     #tool-hint 不设时限  ·  #live-cut 慢慢来  ·  .step p  ·  .target-caption
+
+   加载在 hongshan.css / workshop-ux.css 之后，只覆盖工坊页。 */
+
+/* ================= 桌面 ≥1401px ================= */
+@media (min-width:1401px){
+  /* --- A 级：动作指令 --- */
+  .bench-footer{padding:15px 20px;gap:16px}
+  .bench-footer #gesture-tip{font-size:21px;font-weight:600;line-height:1.4;color:#472d1b;letter-spacing:.2px}
+  .bench-footer #live-cut{font-size:12px;color:#9a7d5f}
+  .board-message{font-size:16px;line-height:1.6;color:#5f452c;gap:9px;
+    width:auto;max-width:88%;padding:7px 18px;border-radius:999px;
+    background:#fdf6e7d6;border:1px solid #e2ccab;
+    box-shadow:0 2px 10px #6b4a2d14,inset 0 1px 0 #fffdf6}
+  .board-message .message-dot{width:7px;height:7px}
+  .step-tip .tip-line{font-size:16px;line-height:1.6}
+  .step-tip .tip-line i{width:21px;height:21px;font-size:12px;line-height:21px}
+  .step-tip .tip-head .tip-kicker{font-size:13px}
+  .step-tip .tip-actions button{font-size:14px}
+  .stage-flash{font-size:22px}
+
+  /* --- B 级：步骤身份 / 工具 / 操作 --- */
+  .bench-header{font-size:15px;min-height:60px;padding:16px 20px}
+  .bench-header i{width:6px;height:6px}
+  .bench-header .material-label{font-size:14px;padding:9px 8px}
+  .tool-strip{padding:15px 18px;gap:14px}
+  .tool{font-size:16px;gap:9px}
+  .tool .icon{width:21px;height:21px}
+  .tool-strip #assist-button{font-size:15px;padding:8px 2px}
+  .undo-button{font-size:14px;padding:11px 18px;gap:7px}
+  .undo-button .icon{width:16px;height:16px}
+  .hint-mini small{font-size:10px}
+  .hint-mini .icon{width:18px;height:18px}
+  .tool-hint{font-size:10px}
+
+  .step h2{font-size:17px}
+  .step.current h2{font-size:19px}
+  .step p{font-size:10px;line-height:1.6}
+  .step-index{width:31px;height:31px;font-size:11px}
+  .step-state{font-size:9px}
+  .step{padding:13px 0}
+
+  .instruction-index{font-size:12px;letter-spacing:.6px}
+  .instruction-card h3{font-size:23px;line-height:1.45;margin:8px 0 10px}
+  .instruction-card p{font-size:15px;line-height:1.8}
+
+  .page-heading p{font-size:15px;line-height:1.7}
+  .page-heading .eyebrow{font-size:11px}
+  .level-picker small{font-size:11px}
+  .level-picker strong{font-size:20px}
+  .level-stamp{font-size:24px;width:42px;height:42px}
+
+  .workshop-breadcrumb{font-size:12px}
+  .workshop-breadcrumb button{font-size:14px}
+
+  /* --- 右栏：参考 / 进度 / 动作 --- */
+  .section-label{font-size:12px}
+  .section-label>span{font-size:10px}
+  .reference-tabs{font-size:13px}
+  .target-name strong{font-size:20px}
+  .target-name>span{font-size:11px}
+  .target-caption{font-size:11px;line-height:1.6}
+  .progress-block>div:first-child{font-size:13px}
+  .progress-block strong{font-size:16px}
+  .progress-block small{font-size:11px}
+  .budget-value>span{font-size:12px}
+  .cut-budget .section-label>span{font-size:11px}
+  .secondary-button{font-size:14px;min-height:46px}
+  .restart-button{font-size:14px}
+  .restart-button>span{font-size:10px}
+  .quiet-button{font-size:12px}
+  .process-note p{font-size:15px}
+  .process-note small{font-size:10px}
+}
+
+/* ================= 桌面 1051–1400px（一档收小） ================= */
+@media (min-width:1051px) and (max-width:1400px){
+  .bench-footer{padding:14px 18px;gap:14px}
+  .bench-footer #gesture-tip{font-size:19px;font-weight:600;line-height:1.4;color:#472d1b}
+  .bench-footer #live-cut{font-size:11px}
+  .board-message{font-size:15px;color:#5f452c;
+    width:auto;max-width:88%;padding:6px 16px;border-radius:999px;
+    background:#fdf6e7d6;border:1px solid #e2ccab;box-shadow:0 2px 10px #6b4a2d14}
+  .step-tip .tip-line{font-size:15px}
+  .step-tip .tip-head .tip-kicker{font-size:12px}
+
+  .bench-header{font-size:14px;min-height:56px;padding:14px 16px}
+  .bench-header .material-label{font-size:13px}
+  .tool-strip{padding:14px 15px}
+  .tool{font-size:15px}
+  .tool .icon{width:20px;height:20px}
+  .tool-strip #assist-button{font-size:14px}
+  .undo-button{font-size:13px;padding:10px 15px}
+
+  .step h2{font-size:16px}
+  .step.current h2{font-size:18px}
+  .step p{font-size:10px;line-height:1.6}
+  .step-index{width:29px;height:29px;font-size:10px}
+  .step{padding:12px 0}
+
+  .instruction-index{font-size:11px}
+  .instruction-card h3{font-size:21px;line-height:1.45}
+  .instruction-card p{font-size:14px;line-height:1.75}
+
+  .page-heading p{font-size:14px}
+  .page-heading .eyebrow{font-size:10px}
+  .level-picker small{font-size:10px}
+  .level-picker strong{font-size:18px}
+
+  .target-name strong{font-size:18px}
+  .target-name>span{font-size:10px}
+  .target-caption{font-size:10px}
+  .reference-tabs{font-size:12px}
+  .progress-block>div:first-child{font-size:12px}
+  .progress-block strong{font-size:15px}
+  .secondary-button{font-size:13px}
+  .restart-button{font-size:13px}
+}
+
+/* ================= 矮屏（≤850px 高）再收一档，避免工坊溢出 ================= */
+@media (min-width:951px) and (max-height:850px){
+  .bench-footer #gesture-tip{font-size:18px}
+  .board-message{font-size:14px;bottom:15px}
+  .bench-header{min-height:52px;padding:12px 16px;font-size:13px}
+  .tool-strip{padding:12px 15px}
+  .tool{font-size:14px}
+  .tool-strip #assist-button{font-size:13px}
+  .undo-button{font-size:12px;padding:9px 14px}
+  .instruction-card h3{font-size:20px;margin:7px 0 9px}
+  .instruction-card p{font-size:13px;line-height:1.7}
+  .step h2{font-size:15px}
+  .step.current h2{font-size:17px}
+  .step p{font-size:9px}
+  .step{padding:10px 0}
+  .page-heading p{font-size:12px}
+}
+
+/* ================= 平板 701–1050（原移动版样式之上小抬一档） ================= */
+@media (min-width:701px) and (max-width:1050px){
+  .bench-footer #gesture-tip{font-size:17px;font-weight:600;color:#472d1b}
+  .board-message{font-size:14px}
+  .tool{font-size:14px}
+  .step h2{font-size:14px}
+  .instruction-card h3{font-size:21px}
+  .instruction-card p{font-size:13px;line-height:1.8}
+  .page-heading p{font-size:13px}
+}
+
+/* ================= 手机 ≤700（引导条是主角） ================= */
+@media (max-width:700px){
+  .mg-action{font-size:18px;line-height:1.4}
+  .mg-gesture{font-size:14px;line-height:1.5}
+  .mg-detail h3{font-size:17px}
+  .mg-detail p{font-size:14px;line-height:1.75}
+  .bench-footer #gesture-tip{font-size:16px;font-weight:600;color:#472d1b}
+  .bench-footer #live-cut{font-size:12px}
+  .board-message{font-size:13px}
+  .tool{font-size:14px}
+  .undo-button{font-size:12px}
+  .instruction-card h3{font-size:20px}
+  .instruction-card p{font-size:13px;line-height:1.8}
+  .page-heading p{font-size:12px}
+  .target-name strong{font-size:17px}
+  .target-name>span{font-size:10px}
+  .target-caption{font-size:10px}
+}
+
+/* ================= v6.2 提示条并入画布标题带 =================
+   用户红框指的位置是「切板 / SLICE」那条标题带：提示条不再压在画布上，
+   改成标题带正中的一行，画布顶部整块让出来。 */
+.bench-header{justify-content:space-between}
+.bench-header .board-message{display:flex;position:static;left:auto;top:auto;right:auto;bottom:auto;
+  transform:none;width:auto;max-width:none;flex:1 1 auto;min-width:0;
+  margin:0 16px;padding:0;border:0;background:none;box-shadow:none;
+  font-size:15px;line-height:1.4;letter-spacing:.2px;color:#5f452c;
+  justify-content:center;text-align:center;gap:8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bench-header .board-message .message-dot{width:6px;height:6px;flex-shrink:0}
+.board-message{display:none}          /* 画布内已无此节点，留着兜底 */
+
+/* 步骤说明卡回到画布顶部正中（提示条已让出画布） */
+.step-tip{top:16px}
+
+@media (max-width:1050px){
+  .bench-header .board-message{font-size:12px;margin:0 10px}
+}
+@media (max-width:700px){
+  /* 手机上有引导条写着同一句话，标题带不再重复 */
+  .bench-header .board-message{display:none}
+  .step-tip{top:16px}
+}
+
+/* ================= v6.2 删掉的装饰 =================
+   用户圈出来要删的：步骤状态「已完成 / 进行中」、画布左上「一 方 原 石 / 一 片 素 玉」、
+   左侧竖排「琢 · 玉 · 成 · 器」、四个角的定位小圈。 */
+.step-state,.axis-top,.axis-left,.corner{display:none !important}

@@ -4,7 +4,7 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#eee4d2"><meta name="description" content="走进红山的土地与玉色，从一方原石开始，体验八道琢玉手作。">
   <title>玉见 · 从原石到成器</title>
-  <link rel="icon" type="image/svg+xml" href="icon.svg"><script>if(location.protocol==="http:"||location.protocol==="https:"){["yujian-display","yujian-mincho"].forEach(function(n){var _p=document.createElement("link");_p.rel="preload";_p.as="font";_p.type="font/woff2";_p.crossOrigin="anonymous";_p.href="assets/fonts/"+n+".woff2";document.head.appendChild(_p);});}</script><link rel="stylesheet" href="hongshan.css"><link rel="stylesheet" href="hero-transition.css"><link rel="stylesheet" href="workshop-ux.css">
+  <link rel="icon" type="image/svg+xml" href="icon.svg"><script>if(location.protocol==="http:"||location.protocol==="https:"){["yujian-display","yujian-mincho"].forEach(function(n){var _p=document.createElement("link");_p.rel="preload";_p.as="font";_p.type="font/woff2";_p.crossOrigin="anonymous";_p.href="assets/fonts/"+n+".woff2";document.head.appendChild(_p);});}</script><link rel="stylesheet" href="hongshan.css"><link rel="stylesheet" href="hero-transition.css"><link rel="stylesheet" href="workshop-ux.css"><link rel="stylesheet" href="home-hero-v6.css"><link rel="stylesheet" href="workshop-type-v6.css"><link rel="stylesheet" href="corner-qr.css">
 </head>
 <body data-view="home">
   <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -30,8 +30,9 @@
     <section id="home-screen" aria-label="走进红山">
       <section class="hongshan-hero">
         <div class="hero-copy"><div class="eyebrow"><span class="earth-dot"></span> 红山文化 · 史前玉作体验</div><h1>在红山，<br>与一块玉<em>相遇。</em></h1><p class="hero-description">风掠过红色的山，纹样留在陶土间。<br>循着古老的器形，从一方原石开始，<br>用自己的双手，让玉慢慢显形。</p><div class="hero-actions"><button id="start-journey" class="primary-button">开启我的玉作 <svg class="icon"><use href="#i-arrow"/></svg></button><button id="culture-button" class="story-link" aria-haspopup="dialog">读一页红山手记 <span>↗</span></button></div><div class="hero-footnote"><span>新石器时代</span><i></i><span>西辽河流域</span><i></i><span>五件器物 · 八道手作</span></div></div>
-        <figure class="hero-landscape"><img class="mural-art" src="assets/hero-art-v2.webp" alt="红山五器：中央为玉猪龙，四周为玉鳖、玉鸮、瓦纹饰与绿松石鱼饰，赭红底抽象图形"></figure>
+        <figure class="hero-landscape"><img class="mural-art" src="assets/hero-art-v3.webp" alt="赭红底五器同席：中央为玉猪龙卷云，外环玉凤、女神头像、玉龟、两件勾云形玉佩，下方彩陶罐、玉鸮、瓦纹饰与绿松石鱼饰，四周彩陶云纹边框，当代图形转译"></figure>
       </section>
+      <div class="scroll-hint" id="scroll-hint" aria-hidden="true"><span>往下看，慢慢挑一件</span><svg viewBox="0 0 24 24"><path d="M12 4v15m-6-6 6 6 6-6"/></svg></div>
       <div class="pottery-divider" aria-hidden="true"><svg viewBox="0 0 1200 20" preserveAspectRatio="none"><defs><pattern id="pottery-band" width="80" height="20" patternUnits="userSpaceOnUse"><path d="M0 16 20 4 40 16 60 4 80 16M0 4H80" fill="none" stroke="currentColor" stroke-width="1.3"/></pattern></defs><rect width="1200" height="20" fill="url(#pottery-band)"/></svg></div>
       <section class="form-selection" id="forms" aria-labelledby="forms-title"><div class="form-section-heading"><div><div class="eyebrow">第一步 / 遇见器形</div><h2 id="forms-title" tabindex="-1">哪一件，与你有缘？</h2></div><p>选一件喜欢的器物，走进你的玉作工坊。<br><span>不设时限，可以示范，也可以一步步撤回。</span></p></div><div class="home-artifact-list" id="home-artifact-list" aria-label="选择制作的器物"></div></section>
       <section class="earth-story" aria-label="红山视觉的三个线索"><div class="story-intro"><span class="eyebrow">大地里的线索</span><h2>把红山，<br>握在手里。</h2><button id="culture-more" class="story-link" aria-haspopup="dialog">看看它们从哪里来 <span>↗</span></button></div><article><span class="story-number">01 / 山色</span><div class="story-swatches" aria-hidden="true"><i></i><i></i><i></i><i></i></div><h3>赭红，是大地的颜色。</h3><p>取意红山的赭红山体，用陶土、岩石与细砂的色彩，铺开一场相遇。</p></article><article><span class="story-number">02 / 陶纹</span><svg class="story-motif" viewBox="0 0 180 52" aria-hidden="true"><path d="M3 10H177M3 44H177M3 37 25 17 47 37 69 17 91 37 113 17 135 37 157 17 177 37"/></svg><h3>一笔纹样，记下时间。</h3><p>从红山彩陶的平行线、三角纹与之字纹提取节奏，让古老纹样走进界面。</p></article><article><span class="story-number">03 / 玉形</span><svg class="story-motif jade-contour" viewBox="0 0 180 52" aria-hidden="true"><path d="M52 13c-21-11-38 5-35 21 3 18 29 15 34 2 5-15-8-26-22-20M48 12l6-7-1 14-9 1M80 12h39l-5 30H85zM82 17h34M143 16l10-8 12 8v23l-11 7-11-7zM145 25l9 6 9-6M148 20h1m10 0h1"/></svg><h3>循着器形，亲手琢玉。</h3><p>观察轮廓，描绘纹路。把一眼看见的器物，变成一件亲手完成的作品。</p></article></section>
@@ -56,12 +57,11 @@
     <section class="workshop" aria-label="从原石到成器的玉器工坊">
       <aside class="process-panel"><div class="section-label">八道玉作 <span>从石到玉</span></div><ol class="step-list" id="step-list"></ol><div class="process-note"><span class="quote-mark">“</span><p>石有纹理，<br>手有记忆。</p><small>慢慢琢，玉自见。<br>每一步都可以撤回。</small></div><button id="sound-button" class="quiet-button" aria-pressed="false"><svg class="icon"><use href="#i-sound"/></svg><span>玉石音效 · 关</span></button></aside>
       <div class="workbench">
-        <div class="bench-header"><span><i></i><span id="bench-phase">磨皮 / REVEAL</span></span><button class="material-label" id="material-button" aria-haspopup="dialog">米白褐斑 · 换玉料 ⌄</button></div>
+        <div class="bench-header"><span><i></i><span id="bench-phase">磨皮 / REVEAL</span></span><div class="board-message" role="status" aria-live="polite"><span class="message-dot"></span><span id="board-message-text">按住来回磨去石皮，让玉质慢慢露出来</span></div><button class="material-label" id="material-button" aria-haspopup="dialog">米白褐斑 · 换玉料 ⌄</button></div>
         <div class="canvas-wrap" id="canvas-wrap">
           <div class="bench-axis axis-top" id="bench-axis">一 方 原 石</div><div class="bench-axis axis-left">琢 · 玉 · 成 · 器</div>
           <canvas id="jade-canvas" width="900" height="900" tabindex="0" aria-label="玉料操作区，按住鼠标或手指拖动；也可使用示范按钮"></canvas>
           <div class="corner corner-tl"></div><div class="corner corner-tr"></div><div class="corner corner-bl"></div><div class="corner corner-br"></div>
-          <div class="board-message" role="status" aria-live="polite"><span class="message-dot"></span><span id="board-message-text">按住来回磨去石皮，让玉质慢慢露出来</span></div>
           <div class="start-cue" id="start-cue" hidden aria-hidden="true"><span class="cue-ring"></span><span class="cue-dot"></span><span class="cue-arrow"><svg viewBox="0 0 28 18" aria-hidden="true"><path d="M2 9h22m-6-6 6 6-6 6"/></svg></span><b class="cue-label">从这里起手</b></div>
           <div class="step-tip" id="step-tip" hidden role="dialog" aria-labelledby="tip-kicker">
             <div class="tip-head"><span class="tip-kicker" id="tip-kicker">第 1 步 · 磨去石皮</span><button type="button" class="tip-close" id="tip-close" aria-label="关闭本步提示">×</button></div>
@@ -92,6 +92,7 @@
         <div class="instruction-card"><span class="instruction-index" id="instruction-index">第一道 · 磨皮</span><h3 id="instruction-title">先见玉质，再想玉形</h3><p id="instruction-text">按住拖动，磨去不规整原石上的石皮，露出里面的米白玉质。</p><div class="instruction-foot"><span></span>一笔一刀，都可以撤回</div></div>
         <div class="guide-actions"><button id="hint-button" class="secondary-button" aria-pressed="true"><svg class="icon"><use href="#i-eye"/></svg><span>辅助引线</span><span class="toggle-indicator"></span></button></div>
         <button id="restart-button" class="restart-button"><svg class="icon"><use href="#i-reset"/></svg>重新开料 <span>R</span></button>
+        <div class="qr-dock"><button type="button" class="corner-qr__btn" data-qr-open aria-haspopup="dialog" aria-controls="qr-modal" aria-label="扫码在手机上游玩《玉见》"><img class="corner-qr__img" src="assets/qr-github.png" alt="《玉见》试玩地址二维码" width="80" height="80"><span class="corner-qr__label">扫码试玩</span></button></div>
       </aside>
     </section>
     </section>
@@ -115,6 +116,67 @@
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div class="corner-qr" id="corner-qr">
+    <button type="button" class="corner-qr__btn" id="corner-qr-btn" data-qr-open aria-haspopup="dialog" aria-controls="qr-modal" aria-label="扫码在手机上游玩《玉见》"><img class="corner-qr__img" src="assets/qr-github.png" alt="《玉见》试玩地址二维码" width="96" height="96"><span class="corner-qr__label">扫码试玩</span></button>
+  </div>
+  <div class="qr-modal" id="qr-modal" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title" hidden>
+    <div class="qr-modal__veil" data-qr-close></div>
+    <div class="qr-modal__panel">
+      <button type="button" class="qr-modal__close" data-qr-close aria-label="关闭二维码">×</button>
+      <p class="qr-modal__kicker">SCAN TO PLAY</p>
+      <h2 class="qr-modal__title" id="qr-modal-title">用手机扫一扫，<br>把它带回手上慢慢琢。</h2>
+      <img class="qr-modal__img" src="assets/qr-github.png" alt="《玉见》试玩地址二维码" width="260" height="260">
+      <p class="qr-modal__url">baiyu1770-sudo.github.io/yujian</p>
+      <a class="qr-modal__link" href="https://baiyu1770-sudo.github.io/yujian/" target="_blank" rel="noopener">在手机上打开 <span>↗</span></a>
+    </div>
+  </div>
+  <button type="button" class="to-top" id="to-top" aria-label="回到顶部"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V5m-6 6 6-6 6 6"/></svg></button>
   <script src="jade-model.js"></script><script src="stage-assets.js"></script><script src="artifact-models.js"></script><script src="engine.js"></script><script src="workshop-engine.js"></script><script src="game.js"></script>
+  <script>
+  /* 常驻二维码 / 滚动提示 / 回到顶部：独立小脚本，不与 game.js 共用任何状态 */
+  (function () {
+    var qrBtns = document.querySelectorAll('[data-qr-open]'),
+        modal = document.getElementById('qr-modal'),
+        hint = document.getElementById('scroll-hint'),
+        toTop = document.getElementById('to-top'),
+        qrLast = null;
+
+    if (qrBtns.length && modal) {
+      var openQR = function (e) {
+        qrLast = e.currentTarget;
+        modal.hidden = false;
+        var c = modal.querySelector('.qr-modal__close');
+        if (c) c.focus();
+      };
+      var closeQR = function () {
+        modal.hidden = true;
+        if (qrLast && qrLast.offsetParent) qrLast.focus();
+      };
+      Array.prototype.forEach.call(qrBtns, function (b) {
+        b.addEventListener('click', openQR);
+      });
+      modal.addEventListener('click', function (e) {
+        if (e.target.closest('[data-qr-close]')) closeQR();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !modal.hidden) closeQR();
+      });
+    }
+
+    var onScroll = function () {
+      var y = window.scrollY || document.documentElement.scrollTop || 0;
+      if (hint) hint.classList.toggle('is-hidden', y > 80);
+      if (toTop) toTop.classList.toggle('is-on', y > window.innerHeight * 0.9);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    onScroll();
+
+    if (toTop) toTop.addEventListener('click', function () {
+      var calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' });
+    });
+  })();
+  </script>
 </body>
 </html>

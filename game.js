@@ -34,7 +34,7 @@
   const images = {};
   let ready = false, loadError = '', game, hints = true, referencePhase = false, workshopVisited = false;
   let dragging = false, captured = null, path = [], hover = null, preview = null, strokePhase = 0;
-  let raf = 0, busy = false, demoFrame = 0, session = 0, toastTimer, flashTimer, resultTimer;
+  let raf = 0, busy = false, demoFrame = 0, demoTimer = 0, demoTickAt = 0, session = 0, toastTimer, flashTimer, resultTimer;
   let surface = null, surfaceKey = '', startedAt = Date.now(), finishedAt = 0, lastPreview = 0;
   let chips = [], audioContext, audioMaster, audioCompressor, noiseBuffer, emitAcc = 0, palette = null;
   const TOUCH = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
@@ -58,19 +58,96 @@
     clearTimeout(toastTimer); $('toast').textContent = text; $('toast').classList.add('show');
     toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3200);
   }
+  /* ————————————— 音频 —————————————
+     v5.10 重写。手机（尤其扫码进的微信内置浏览器）听不到声音的几个成因，逐个兜住：
+     ① 微信 X5 / WKWebView 的音频会话要等 WeixinJSBridgeReady 或一次 bridge 调用之后才激活。
+        在那之前 AudioContext 建得出来、state 也会变 running，但输出被系统吞掉——
+        这是「电脑上有声、扫码后无声」的主因；
+     ② AudioContext 必须在用户手势里创建；suspended / interrupted 期间 currentTime 不前进，
+        这时 playSound 只是把节点排进一条永远不走的时钟，等于静默丢弃，不能丢；
+     ③ iOS 来电、切后台后 state 会变成非标准的 'interrupted'，只判 'suspended' 会漏；
+     ④ bfcache 回退、切回前台后 ctx 会再次 suspended，没人 resume 就一直哑着。 */
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const inWeChat = /MicroMessenger/i.test(navigator.userAgent);
+  const AUDIO_HINT_KEY = 'yujian-audio-hint-v1';
+  let audioQueue = [], audioResumePending = 0, soundOffHinted = false, iosHintShown = false;
+  try { iosHintShown = localStorage.getItem(AUDIO_HINT_KEY) === '1'; } catch (_) { /* 隐私模式不记忆 */ }
+
+  function ensureAudio() {
+    if (audioContext) return audioContext;
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    try { audioContext = new Ctor({ latencyHint: 'interactive' }); }
+    catch (_) { try { audioContext = new Ctor(); } catch (_) { return null; } }
+    try {
+      /* 状态自己变回 running（例如系统解除了音频中断）时，把排队的声音补上 */
+      audioContext.addEventListener?.('statechange', () => { if (audioContext.state === 'running') flushAudio(); });
+    } catch (_) { /* 老浏览器没有 statechange */ }
+    return audioContext;
+  }
+  /* iOS 只认「在手势里真的播过一帧」。1 采样静音 buffer + 一个增益为 0 的振荡器，
+     两者都几乎不出声，但足以让音频会话从 ambient 切到可播放。 */
+  function primeAudio() {
+    const c = audioContext; if (!c || c.__primed) return;
+    try {
+      const buffer = c.createBuffer(1, 1, 22050);
+      const src = c.createBufferSource(); src.buffer = buffer;
+      src.connect(c.destination); src.start(0);
+      const osc = c.createOscillator(), gain = c.createGain();
+      gain.gain.value = .0001; osc.connect(gain).connect(c.destination);
+      osc.start(); osc.stop(c.currentTime + .02);
+      c.__primed = true;
+    } catch (_) { /* Audio is optional. */ }
+  }
+  function resumeAudio() {
+    const c = ensureAudio(); if (!c) return;
+    if (c.state === 'running') { flushAudio(); return; }
+    /* 一次手势会同时来 pointerdown / touchstart / click，这里去重，别反复 resume */
+    if (audioResumePending) return;
+    audioResumePending = 1;
+    const done = () => { audioResumePending = 0; if (c.state === 'running') flushAudio(); };
+    try {
+      const p = c.resume();
+      if (p && typeof p.then === 'function') p.then(done, done); else done();
+    } catch (_) { audioResumePending = 0; }
+  }
+  /* resume 之前请求过的音色先入队；恢复后按顺序补播（只补最近三声，避免一次全炸出来）。 */
+  function flushAudio() {
+    if (!audioQueue.length || !audioContext || audioContext.state !== 'running') return;
+    const queue = audioQueue.splice(0, audioQueue.length);
+    queue.slice(-3).forEach(type => { try { playSound(type); } catch (_) { /* 补播失败不影响流程 */ } });
+  }
+  /* 微信内置浏览器：等 bridge 就绪、或主动调一次 bridge，音频会话才会被真正打开。
+     注意这里只在 ctx 已经因为用户手势建出来之后才去 prime/resume，
+     绝不在页面加载时提前建 ctx —— 老 iOS 上那样建出来的 ctx 会永久 suspended。 */
+  let wechatKicked = false;
+  function wechatKick() {
+    if (!inWeChat || wechatKicked) return;
+    const follow = () => { wechatKicked = true; if (audioContext) { primeAudio(); resumeAudio(); } };
+    try {
+      if (typeof window.WeixinJSBridge === 'undefined') {
+        document.addEventListener('WeixinJSBridgeReady', follow, { once: true });
+      } else {
+        window.WeixinJSBridge.invoke('getNetworkType', {}, follow);
+      }
+    } catch (_) { /* 非微信环境会直接抛，忽略 */ }
+  }
+  /* iOS 的侧边静音开关会把 WebAudio 一起静音，代码无法检测；running 说明解锁成功，
+     这时给一次提示就够，不要每次弹。 */
+  function maybeIOSHint() {
+    if (!isIOS || iosHintShown || !audioContext || audioContext.state !== 'running') return;
+    iosHintShown = true;
+    try { localStorage.setItem(AUDIO_HINT_KEY, '1'); } catch (_) { /* 隐私模式不记忆 */ }
+    setTimeout(() => toast('iPhone 若听不见音效：把侧边静音开关拨到「响铃」，并调高音量。'), 900);
+  }
+  /* 任意位置、任意元素的第一次触摸都算手势；用 capture 抢在业务逻辑之前，防止被 stopPropagation 吃掉。 */
   function unlockAudio() {
     if (!save.sound) return;
-    try {
-      audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
-      if (audioContext.state === 'suspended') audioContext.resume();
-      /* iOS 需要在用户手势里真正播过一个 buffer 才肯解锁；这里播一个 1 帧静音。 */
-      if (!audioContext.__primed) {
-        const buffer = audioContext.createBuffer(1, 1, 22050);
-        const src = audioContext.createBufferSource();
-        src.buffer = buffer; src.connect(audioContext.destination); src.start(0);
-        audioContext.__primed = true;
-      }
-    } catch (_) { /* Audio is optional. */ }
+    if (!ensureAudio()) return;
+    /* Safari 16.4+ 的 audioSession：设成 playback 后 WebAudio 不再被侧边静音开关掐掉。
+       这是 iPhone「开关拨到静音就没声」唯一能用代码解决的一半。 */
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) { /* 不支持的浏览器忽略 */ }
+    primeAudio(); resumeAudio(); wechatKick(); maybeIOSHint();
   }
   function audioChain() {
     if (!audioContext) return null;
@@ -83,18 +160,130 @@
     }
     return audioMaster;
   }
-  function playTone(freqs, wave, level, dur) {
+  function playTone(freqs, wave, level, dur, step) {
     const master = audioChain(); if (!master) return;
-    const now = audioContext.currentTime, step = freqs.length > 2 ? .1 : .08;
+    const now = audioContext.currentTime, gap = step ?? (freqs.length > 2 ? .1 : .08);
     freqs.forEach((frequency, i) => {
       const osc = audioContext.createOscillator(), gain = audioContext.createGain();
       osc.type = wave; osc.frequency.value = frequency;
-      const t = now + i * step;
+      const t = now + i * gap;
       gain.gain.setValueAtTime(0, t);
       gain.gain.linearRampToValueAtTime(level, t + .012);
       gain.gain.exponentialRampToValueAtTime(.0001, t + dur);
       osc.connect(gain).connect(master);
       osc.start(t); osc.stop(t + dur + .02);
+    });
+  }
+  /* 平坦白噪（不带衰减包络）：摩擦类音色要的是一段「面」，
+     原来的 noiseBuffer 自带 pow(1-t,2) 衰减，只适合点状的一声「嚓」。 */
+  let grainBuf = null;
+  function grainBuffer() {
+    const c = audioContext;
+    if (grainBuf && grainBuf.sampleRate === c.sampleRate) return grainBuf;
+    const len = Math.max(1, Math.floor(c.sampleRate * .3));
+    grainBuf = c.createBuffer(1, len, c.sampleRate);
+    const data = grainBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * .9;
+    return grainBuf;
+  }
+  /* 磨皮 / 细磨：绵密的沙沙。带通中心频率跟着拖动速度在 700–1800Hz 之间滑，
+     颗粒用短噪声 + 随机播放速率，叠出砂纸的「细而不齐」；峰值压在 .07 以内，久听不累。 */
+  function sandSwish(k = 1) {
+    const c = audioContext, master = audioChain(); if (!c || !master) return;
+    const now = c.currentTime;
+    const speed = Math.min(1, rubSpeed / 26);
+    const center = Math.max(700, Math.min(1800, 700 + speed * 1100 + rnd(110, -110)));
+    const dur = .07 + Math.random() * .05;
+    const src = c.createBufferSource(); src.buffer = grainBuffer();
+    src.playbackRate.value = rnd(1.16, .84);
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = center; bp.Q.value = 1.5;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.min(6200, center * 2.8);
+    const gain = c.createGain();
+    const peak = Math.min(.07, (.02 + speed * .04) * k);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(peak, now + .009);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + dur);
+    src.connect(bp).connect(lp).connect(gain).connect(master);
+    src.start(now); src.stop(now + dur + .02);
+  }
+  /* 切板 / 粗切拖动时的锯路摩擦：比磨皮更高、更薄，只在真的在锯的时候出一点声。 */
+  function sawHiss(k = 1) {
+    const c = audioContext, master = audioChain(); if (!c || !master) return;
+    const now = c.currentTime, dur = .06 + Math.random() * .04;
+    const src = c.createBufferSource(); src.buffer = grainBuffer();
+    src.playbackRate.value = rnd(1.3, 1.0);
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = .9;
+    bp.frequency.setValueAtTime(2600, now);
+    bp.frequency.exponentialRampToValueAtTime(1700, now + dur);
+    const gain = c.createGain(), peak = Math.min(.07, .04 * k);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(peak, now + .008);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + dur);
+    src.connect(bp).connect(gain).connect(master);
+    src.start(now); src.stop(now + dur + .02);
+  }
+  /* 描形 / 画细节：笔尖擦过宣纸，比磨皮闷、比抛光干。 */
+  function paperSwipe(k = 1) {
+    const c = audioContext, master = audioChain(); if (!c || !master) return;
+    const now = c.currentTime, dur = .05 + Math.random() * .035;
+    const src = c.createBufferSource(); src.buffer = grainBuffer();
+    src.playbackRate.value = rnd(1.1, .82);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900 + rnd(220, -220); lp.Q.value = .7;
+    const gain = c.createGain(), peak = Math.min(.045, .026 * k);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(peak, now + .01);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + dur);
+    src.connect(lp).connect(gain).connect(master);
+    src.start(now); src.stop(now + dur + .02);
+  }
+  /* 抛光：柔和的摩擦 + 一层很轻的泛音（两个和谐 sine），拂拭感靠高频颗粒在上面飘。 */
+  function polishGlide(k = 1) {
+    const c = audioContext, master = audioChain(); if (!c || !master) return;
+    const now = c.currentTime, dur = .13 + Math.random() * .06;
+    const src = c.createBufferSource(); src.buffer = grainBuffer();
+    src.playbackRate.value = rnd(.98, .74);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2100; lp.Q.value = .5;
+    const gain = c.createGain(), peak = Math.min(.06, .034 * k);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(peak, now + .02);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + dur);
+    src.connect(lp).connect(gain).connect(master);
+    src.start(now); src.stop(now + dur + .02);
+    /* 泛音：1320 / 1980 是 660 的四、六倍，听上去是「亮」不是「响」 */
+    [1320, 1980].forEach((f, i) => {
+      const osc = c.createOscillator(), g = c.createGain();
+      osc.type = 'sine'; osc.frequency.value = f + rnd(6, -6);
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(.008 - i * .003, now + .04);
+      g.gain.exponentialRampToValueAtTime(.0001, now + dur * .9);
+      osc.connect(g).connect(master); osc.start(now); osc.stop(now + dur + .02);
+    });
+  }
+  /* 落刀的一声「嚓」：高频颗粒 + 极短的低频「咔」。只在真的落刀那一瞬响，不连成片。 */
+  function cutStrike(level = 1) {
+    noiseBurst(.085, 2600, .12 * level);
+    playTone([1180, 820], 'triangle', .045 * level, .085, .012);
+    playTone([132], 'sine', .07 * level, .16, .02);
+  }
+  /* 成器：四音上行 + 长尾泛音。峰值 .12，靠压缩器收住，不刺耳。 */
+  function completeChime() {
+    const c = audioContext, master = audioChain(); if (!c || !master) return;
+    const now = c.currentTime + .02;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+      const t = now + i * .11, osc = c.createOscillator(), gain = c.createGain();
+      osc.type = 'sine'; osc.frequency.value = f;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(.12, t + .018);
+      gain.gain.exponentialRampToValueAtTime(.0001, t + .95);
+      osc.connect(gain).connect(master); osc.start(t); osc.stop(t + 1.02);
+    });
+    [1567.98, 2093].forEach((f, i) => {
+      const t = now + .2 + i * .05, osc = c.createOscillator(), gain = c.createGain();
+      osc.type = 'sine'; osc.frequency.value = f;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(.032, t + .12);
+      gain.gain.exponentialRampToValueAtTime(.0001, t + 1.55);
+      osc.connect(gain).connect(master); osc.start(t); osc.stop(t + 1.6);
     });
   }
   function noiseBurst(dur, freq, level) {
@@ -115,18 +304,28 @@
   }
   function playSound(type) {
     if (!audioContext || !audioChain()) return;
-    if (type === 'paint') { noiseBurst(.055, 1500, .08); return; }
-    if (type === 'cut' || type === 'detail') { noiseBurst(.1, 900, .13); playTone([150], 'triangle', .05, .14); return; }
+    if (type === 'paint') { sandSwish(.55); return; }
+    if (type === 'cut' || type === 'detail') { cutStrike(1); return; }
     if (type === 'failed') { playTone([143, 107], 'triangle', .2, .5); return; }
-    const notes = type === 'advance' ? [659, 880] : type === 'complete' ? [523, 659, 784, 1046] : [880];
-    playTone(notes, 'sine', type === 'complete' ? .15 : .16, type === 'complete' ? .8 : .45);
+    if (type === 'complete') { completeChime(); return; }
+    if (type === 'advance' || type === 'sliced') { playTone([659.25, 987.77], 'sine', .11, .32, .06); return; }
+    playTone([880], 'sine', .14, .4);
   }
   function sound(type) {
-    if (!save.sound) return;
-    unlockAudio();
-    if (!audioContext) return;
-    if (audioContext.state === 'suspended') audioContext.resume().then(() => playSound(type)).catch(() => {});
-    else playSound(type);
+    if (!save.sound) {
+      /* 声音关着时不能只是 return——玩家会以为坏了。每次进页面只提醒一次。 */
+      if (!soundOffHinted && game && game.state.status === 'playing') {
+        soundOffHinted = true; toast('音效是关着的 · 点右上角的喇叭可以打开');
+      }
+      return;
+    }
+    const c = ensureAudio(); if (!c) return;
+    if (c.state !== 'running') {
+      /* 还没 running：先入队再 resume。currentTime 这时不前进，直接调度等于把声音丢掉。 */
+      audioQueue.push(type); if (audioQueue.length > 6) audioQueue.shift();
+      resumeAudio(); return;
+    }
+    playSound(type);
   }
   function haptic(pattern) {
     if (!TOUCH) return;
@@ -138,8 +337,9 @@
   }
   function toggleSound() {
     save.sound = !save.sound; save.soundChoice = true; persist(); updateUI();
+    /* 开关就在用户手势里，是补解锁最稳的时机：之前因为 sound:false 没建过 ctx，这里补上。 */
     if (save.sound) { unlockAudio(); sound('cut'); toast('音效已开。手机震动需要系统支持。'); }
-    else toast('音效已关。');
+    else { audioQueue.length = 0; toast('音效已关。'); }
   }
   /* ————————————— 碎屑粒子 —————————————
      磨皮与切片是两种完全不同的去除：磨是「把石皮搓成粉」，粉细、轻、贴着手往下簌簌落；
@@ -256,6 +456,31 @@
       if (phase === 0) emitGrind(at); else if (phase === 1) emitSlice(at);
     }
     emitAcc = Math.min(emitAcc, step);
+  }
+  /* ————————————— 拖动摩擦音 —————————————
+     和粒子分开算：粒子在 prefers-reduced-motion 下完全不发，但声音要照旧（声音不是动效）。
+     双层节流——先按位移攒够路程（细磨更密、切板更疏），再按时间卡最小间隔，
+     手指划得再快也最多 40ms 一声，避免每帧 createBufferSource 把手机 CPU 顶满、爆音。 */
+  let rubAcc = 0, rubClock = 0, rubSpeed = 0;
+  function strokeAudio(phase, from, to) {
+    if (!save.sound) return;
+    const d = E.distance(from, to);
+    if (d <= 0) return;
+    rubSpeed = rubSpeed * .8 + d * .2;
+    rubAcc = Math.min(rubAcc + d, 60);
+    const step = phase === 1 ? 34 : phase === 7 ? 16 : 11;
+    if (rubAcc < step) return;
+    const now = performance.now();
+    if (now - rubClock < 40) return;
+    rubAcc = 0; rubClock = now;
+    if (rubSpeed < .55) return;
+    const c = ensureAudio(); if (!c) return;
+    if (c.state !== 'running') { resumeAudio(); return; }
+    if (phase === 0) sandSwish(1);
+    else if (phase === 1) sawHiss(.6);
+    else if (phase === 2 || phase === 4) paperSwipe(.9);
+    else if (phase === 6) sandSwish(.72);
+    else if (phase === 7) polishGlide(1);
   }
   function drawParticles(time) {
     const alive = [];
@@ -534,7 +759,12 @@
     $('target-caption').textContent = referencePhase ? W.PHASES[s.phase] + (active.procedural ? ' · 当前制作状态' : ' · 工序效果参考') : '成品参考 · 操作区从原石开始';
     if (!referencePhase) drawArtifact($('target-canvas'));
     $('sound-button').setAttribute('aria-pressed', String(!!save.sound)); $('sound-button').querySelector('span').textContent = `玉石音效 · ${save.sound ? '开' : '关'}`;
-    const mgSound = $('mg-sound'); if (mgSound) mgSound.setAttribute('aria-pressed', String(!!save.sound));
+    const mgSound = $('mg-sound');
+    if (mgSound) {
+      mgSound.setAttribute('aria-pressed', String(!!save.sound));
+      mgSound.setAttribute('aria-label', save.sound ? '玉石音效已开，点按关闭' : '玉石音效已关，点按开启');
+      mgSound.title = save.sound ? '玉石音效 · 开' : '玉石音效 · 关';
+    }
     if (s.phase !== tipPhase) { tipPhase = s.phase; cueAnchor = null; hideStepTip(false); setTimeout(() => showStepTip(false), 140); }
     placeCue();
     schedule();
@@ -748,6 +978,7 @@
     if (dragging && event.pointerId === captured && E.distance(path[path.length - 1], p) > 1) {
       const previous = path[path.length - 1]; path.push(p);
       emitMotion(strokePhase, previous, p);
+      strokeAudio(strokePhase, previous, p);
       if ([0, 2, 4, 6, 7].includes(strokePhase)) { game.paint([previous, p]); updateUI(); }
       else if (performance.now() - lastPreview > 60) { lastPreview = performance.now(); updatePreview(); }
     }
@@ -774,16 +1005,31 @@
     canvas.scrollIntoView({ block: 'center', behavior: 'instant' }); updateUI();
     const start = performance.now(), duration = reduced ? 1 : brush && phase !== 2 && phase !== 4 ? 1800 : Math.min(1700, Math.max(650, guide.length * 9));
     let painted = 0, emitted = 0;
+    /* 看门狗：只在「真的没有帧再推进」时兜底复位。
+       录制、后台标签、掉帧会让 rAF 变慢，但帧还在走，这时不能打断示范——
+       否则示范被反复中止，这一刀永远落不下来。 */
+    clearInterval(demoTimer);
+    demoTickAt = performance.now();
+    demoTimer = setInterval(() => {
+      if (token !== session || !busy) { clearInterval(demoTimer); return; }
+      if (performance.now() - demoTickAt < 3200) return;
+      clearInterval(demoTimer);
+      busy = dragging = false; path = []; preview = null; demoFrame = 0;
+      try { game.cancel?.(); } catch (_) { /* 状态由 updateUI 重新同步 */ }
+      updateUI();
+    }, 800);
     function tick(time) {
       if (token !== session) return;
+      demoTickAt = performance.now();
       const t = Math.min(1, (time - start) / duration), n = Math.max(1, Math.ceil(guide.length * t));
       path = guide.slice(0, n); hover = path[path.length - 1];
-      if (n > emitted) { if (emitted > 0) emitMotion(phase, guide[emitted - 1], guide[n - 1]); emitted = n; }
+      if (n > emitted) { if (emitted > 0) { emitMotion(phase, guide[emitted - 1], guide[n - 1]); strokeAudio(phase, guide[emitted - 1], guide[n - 1]); } emitted = n; }
       if (brush && n > painted) { game.paint(guide.slice(Math.max(0, painted - 1), n)); painted = n; updateUI(); }
       else if (time - lastPreview > 80) { lastPreview = time; updatePreview(); }
       schedule();
       if (t < 1) demoFrame = requestAnimationFrame(tick);
       else {
+        clearInterval(demoTimer);
         const result = brush ? game.end({ assisted: true }) : game.stroke(guide, { assisted: true });
         busy = dragging = false; path = []; preview = null; demoFrame = 0; feedback(result, phase);
       }
@@ -812,6 +1058,109 @@
     const key = recordKey(), old = save.records[key], elapsed = Math.max(1, Math.round((finishedAt - startedAt) / 1000));
     save.records[key] = { stars: Math.max(Number(old?.stars) || 0, stars()), cuts: Math.min(Number(old?.cuts) || Infinity, game.cutter.state.totalCuts + 1), seconds: Math.min(Number(old?.seconds) || Infinity, elapsed), thickness: game.state.dimensions.thickness };
     persist();
+  }
+  /* ————————————— 成器庆祝 —————————————
+     成功弹窗的收尾：花瓣与光点从成品轮廓向外绽放、星级逐颗落下、朱印盖章。
+     1.6s 内走完并静止；prefers-reduced-motion 时只给最终帧。失败分支不调用这里。 */
+  function mountCelebration() {
+    if (document.querySelector('link[data-result-celebration]')) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet'; link.href = 'result-celebration.css';
+    link.setAttribute('data-result-celebration', '');
+    document.head.appendChild(link);
+  }
+  function celebrateSuccess(art) {
+    /* 把成品画布包进一个定位容器，庆祝层挂在它上面，不改变 .result-art 自身的样式与尺寸 */
+    const stage = document.createElement('div');
+    stage.className = 'result-stage';
+    art.replaceWith(stage); stage.appendChild(art);
+    const seal = document.createElement('span');
+    seal.className = 'result-seal'; seal.setAttribute('aria-hidden', 'true'); seal.textContent = '成器';
+    stage.appendChild(seal);
+    /* 星级逐颗落下：把 '★★☆' 拆成逐字 span，间隔 120ms */
+    const stars = $('result-stars'), text = stars.textContent || '';
+    if (!reduced && /^[★☆]+$/.test(text)) {
+      stars.textContent = '';
+      for (const [i, ch] of [...text].entries()) {
+        const span = document.createElement('span');
+        span.className = 'rc-star' + (ch === '☆' ? ' empty' : '');
+        span.textContent = ch; span.style.animationDelay = (i * 120) + 'ms';
+        stars.appendChild(span);
+      }
+    }
+    if (reduced) return;
+    const burst = document.createElement('div');
+    burst.className = 'result-celebration';
+    const cv = document.createElement('canvas'), W = 340, H = 316, dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.setAttribute('aria-hidden', 'true');
+    burst.appendChild(cv); stage.appendChild(burst);
+    playBurst(cv.getContext('2d'), W, H, dpr, burst);
+  }
+  /* 绽放：每片花瓣按编号错开一点起手，向外推到最大半径时淡出；
+     光点从底部缓缓浮起，收在一层很淡的金色外扩环里。 */
+  function playBurst(c, W, H, dpr, holder) {
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const colors = ['#DFD9BA', '#CBCFA6', '#A9843F', '#9D2B25', '#e6d9a5'];
+    const cx = W / 2, cy = H * .46, petals = [], motes = [], rings = [];
+    for (let i = 0; i < 30; i++) {
+      petals.push({
+        a: i / 30 * TAU + rnd(.2, -.2), r0: rnd(58, 40), r1: rnd(128, 92),
+        delay: (i % 6) * .035 + rnd(.08, 0), size: rnd(9.5, 5), spin: rnd(2.2, -2.2),
+        color: colors[i % colors.length], alpha: rnd(.92, .5)
+      });
+    }
+    for (let i = 0; i < 46; i++) {
+      motes.push({ x: rnd(W * .92, W * .08), y: rnd(H * .95, H * .45), r: rnd(2.1, .7),
+        vy: rnd(30, 10), drift: rnd(14, -14), delay: rnd(.55, 0), color: colors[(i * 3) % colors.length] });
+    }
+    for (const d of [0, .1]) rings.push({ delay: d });
+    bloomShimmer();
+    const t0 = performance.now();
+    function frame(now) {
+      const t = (now - t0) / 1000;
+      c.clearRect(0, 0, W, H);
+      /* 外扩环：两道很淡的金线，把「开」的边界说出来 */
+      for (const ring of rings) {
+        const u = (t - ring.delay) / .8;
+        if (u <= 0 || u >= 1) continue;
+        c.beginPath(); c.arc(cx, cy, 40 + u * 96, 0, TAU);
+        c.strokeStyle = `rgba(169,132,63,${(.3 * (1 - u)).toFixed(3)})`;
+        c.lineWidth = 1.4 * (1 - u) + .3; c.stroke();
+      }
+      for (const p of petals) {
+        const u = (t - p.delay) / .95;
+        if (u <= 0 || u >= 1) continue;
+        const e = 1 - Math.pow(1 - u, 2.4), r = p.r0 + (p.r1 - p.r0) * e;
+        const alpha = p.alpha * (u < .16 ? u / .16 : 1 - (u - .16) / .84);
+        const x = cx + Math.cos(p.a) * r, y = cy + Math.sin(p.a) * r * .92;
+        const size = p.size * (u < .3 ? .55 + u * 1.5 : 1);
+        c.save(); c.globalAlpha = Math.max(0, alpha);
+        c.translate(x, y); c.rotate(p.a + p.spin * u);
+        c.beginPath();
+        c.ellipse(0, 0, size * 1.45, size * .62, 0, 0, TAU);
+        c.fillStyle = p.color; c.fill();
+        c.restore();
+      }
+      for (const m of motes) {
+        const u = (t - m.delay) / 1.05;
+        if (u <= 0 || u >= 1) continue;
+        const alpha = Math.sin(Math.PI * u) * .82;
+        c.beginPath();
+        c.arc(m.x + m.drift * u, m.y - m.vy * u, m.r * (1 - u * .35), 0, TAU);
+        c.fillStyle = m.color; c.globalAlpha = alpha; c.fill();
+      }
+      c.globalAlpha = 1;
+      if (t < 1.62) requestAnimationFrame(frame);
+      else { c.clearRect(0, 0, W, H); holder.remove(); }
+    }
+    requestAnimationFrame(frame);
+  }
+  /* 动画起点的一声极轻泛音：让「花开」和声音落在同一拍上。
+     这里只做「有就用」，绝不在手势之外新建 AudioContext（iOS 上那样建出来的会永久 suspended）。 */
+  function bloomShimmer() {
+    if (!save.sound || !audioContext || audioContext.state !== 'running') return;
+    playTone([1318.51, 1760], 'sine', .038, 1.1, .09);
   }
   function showResult() {
     const dialog = $('result-dialog'), failed = game.state.status === 'failed'; dialog.classList.toggle('failed', failed);
@@ -850,6 +1199,8 @@
       if (note) { $('result-note').hidden = false; $('result-note').textContent = note; }
       $('success-description').textContent = `${active.name} · ${active.material}。从磨皮到抛光，八道工序已完成，厚度比例 ${game.state.dimensions.thickness}。`;
       $('result-cuts').textContent = game.cutter.state.totalCuts + 1 + ' 刀'; $('result-time').textContent = Math.max(1, Math.round((finishedAt - startedAt) / 1000)) + ' 秒'; $('result-assisted').textContent = game.state.assist + ' 次';
+      /* 收尾动画放在数据填完之后：先有静态成品与星级，再让它们「开」出来 */
+      celebrateSuccess($('result-art'));
       $('collect-result').addEventListener('click', () => {
         if (practice) { startLevel(game.state.levelIndex, true); return; }
         dialog.close(); openCollection();
@@ -977,7 +1328,14 @@
     const v = view(), sx = (anchor.x - v.x) * v.zoom + 300, sy = (anchor.y - v.y) * v.zoom + 300;
     if (sx < 24 || sx > 576 || sy < 24 || sy > 576) { el.hidden = true; return; }
     el.hidden = false;
-    el.style.left = (sx / 6).toFixed(2) + '%'; el.style.top = (sy / 6).toFixed(2) + '%';
+    /* 起手点要落在画布上，而不是画布外套的框上：
+       矮屏/手机时 #canvas-wrap 比正方形画布宽（两侧留白），
+       用百分比定位会把起手点整体推到左边，和虚线起点对不上。 */
+    const wrap = $('canvas-wrap'), cv = $('jade-canvas');
+    const wr = wrap.getBoundingClientRect(), cr = cv.getBoundingClientRect();
+    const px = cr.left - wr.left + (sx / 600) * cr.width;
+    const py = cr.top - wr.top + (sy / 600) * cr.height;
+    el.style.left = px.toFixed(1) + 'px'; el.style.top = py.toFixed(1) + 'px';
     el.style.setProperty('--cue-angle', (Math.atan2(far.y - p0.y, far.x - p0.x) * 180 / Math.PI).toFixed(1) + 'deg');
   }
   /* ————————————— 首次进入的三步气泡 —————————————
@@ -1126,7 +1484,10 @@
   $('choose-artifact-button').addEventListener('click', () => { if (workshopVisited && document.body.dataset.view === 'home') showWorkshop(); else openArtifacts(); });
   $('sound-button').addEventListener('click', toggleSound);
   const mgSoundButton = $('mg-sound'); if (mgSoundButton) mgSoundButton.addEventListener('click', toggleSound);
-  ['pointerdown', 'touchstart', 'keydown'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
+  /* 任意位置的第一下触摸都要能解锁：capture 阶段监听，元素上 stopPropagation 也拦不住；
+     不设 once —— 第一次可能因为页面还没接住手势而失败，后面每一次都再试一次，成功后开销可忽略。 */
+  ['pointerdown', 'touchstart', 'mousedown', 'click', 'keydown'].forEach(ev =>
+    window.addEventListener(ev, unlockAudio, { capture: true, passive: true }));
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
   document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => { const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close(); }));
   window.addEventListener('keydown', e => {
@@ -1135,8 +1496,14 @@
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !input && !e.shiftKey) { e.preventDefault(); undo(); }
     if (e.key.toLowerCase() === 'r' && !input && !e.ctrlKey && !e.metaKey && !document.querySelector('dialog[open]')) { startLevel(game.state.levelIndex); e.preventDefault(); }
   });
-  document.addEventListener('visibilitychange', () => { if (document.hidden && dragging && !busy) cancelStroke(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && dragging && !busy) cancelStroke();
+    /* 切前台把被系统挂起的音频重新拉起来，不然回来以后整局都是哑的。 */
+    if (!document.hidden) resumeAudio();
+  });
+  window.addEventListener('pageshow', () => resumeAudio());
   buildRail();
+  mountCelebration();
   let mgKeep = 0;
   $('mg-main').addEventListener('pointerdown', () => { mgKeep = window.scrollY; });
   $('tip-ok').addEventListener('click', () => hideStepTip());
@@ -1149,7 +1516,7 @@
     requestAnimationFrame(() => { if (Math.abs(window.scrollY - mgKeep) > 2) window.scrollTo({ top: mgKeep, behavior: 'instant' }); });
   });
   document.querySelectorAll('[data-coach]').forEach(b => b.addEventListener('click', () => { if (b.dataset.coach === 'next') { if (coachIndex + 1 < coachSteps.length) showCoach(coachIndex + 1); else finishCoach(); } else finishCoach(); }));
-  window.addEventListener('resize', () => { if (!$('coach').hidden) placeCoach(); });
+  window.addEventListener('resize', () => { if (!$('coach').hidden) placeCoach(); placeCue(); });
   chooseArtifact(save.lastArtifact, Number.isInteger(save.lastLevel) && E.LEVELS[save.lastLevel] ? save.lastLevel : 0);
   fillHomeArtifacts();
   const all = Object.entries(A).map(([key, info]) => [key, info.image]).concat(catalogue.map(item => [item.id + '-final', item.model.image]));
@@ -1158,3 +1525,4 @@
   }))).then(() => { images.final = images[active.id + '-final']; prepareImages(); ready = true; surfaceKey = ''; startedAt = Date.now(); drawArtifact($('target-canvas')); updateUI(); fillHomeArtifacts(); })
     .catch(() => { loadError = location.protocol === 'file:' ? '素材载入失败，请完整解压游戏文件后再打开' : '素材载入失败，请检查网络后刷新页面重试'; updateUI(); toast(loadError); });
 })();
+
