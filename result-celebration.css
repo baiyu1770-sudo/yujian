@@ -1,7 +1,7 @@
 /* ————————————— 成器庆祝层 —————————————
    只挂在「成功」结果弹窗上（#result-content 不带 .failed）。失败分支完全不受影响。
    配色取玉色系：米白 #DFD9BA、青黄 #CBCFA6、金 #A9843F、朱砂 #9D2B25。
-   整套动效 1.6s 内走完，之后静止；prefers-reduced-motion 时直接给最终帧。 */
+   整套动效 2.6s 内走完，之后静止；prefers-reduced-motion 时直接给最终帧。 */
 
 .result-stage{position:relative;width:max-content;margin:0 auto;isolation:isolate}
 .result-stage .result-art{position:relative;z-index:1;margin:0 auto}
@@ -20,11 +20,11 @@
   100%{opacity:.7;transform:translate(-50%,-50%) scale(1)}
 }
 
-/* 花瓣 / 光点画布：以成品为中心向外撑开 */
-.result-celebration{position:absolute;left:50%;top:46%;width:0;height:0;z-index:2;pointer-events:none}
-.result-celebration canvas{
-  position:absolute;left:50%;top:50%;width:340px;height:316px;
-  transform:translate(-50%,-50%);pointer-events:none;
+/* 整屏礼花画布：全视口、盖在弹窗内容之上、不吃点击。
+   挂在 dialog 里（top layer），所以 position:fixed 的包含块是视口，不会被弹窗的 overflow 裁掉。 */
+.result-fireworks{
+  position:fixed;left:0;top:0;width:100vw;height:100vh;
+  display:block;pointer-events:none;z-index:9;
 }
 
 /* 朱印「成器」：从 1.4 倍按下 → 回弹到 1 倍，带一点抖动收尾 */
@@ -59,10 +59,9 @@
   100%{opacity:1;transform:translateY(0) scale(1)}
 }
 
-/* 小屏：不让庆祝层撑破弹窗 */
+/* 小屏：只收印章，礼花反正铺满全屏，不用另作缩放 */
 @media (max-width:650px){
   .result-stage::after{width:250px;height:226px}
-  .result-celebration canvas{width:min(264px,calc(100vw - 96px));height:auto;aspect-ratio:340/316}
   .result-seal{width:46px;height:46px;font-size:15px;right:-4px;top:0}
 }
 
@@ -71,5 +70,5 @@
   .result-stage::after{animation:none;opacity:.7;transform:translate(-50%,-50%) scale(1)}
   .result-seal{animation:none;opacity:1;transform:rotate(-7deg) scale(1)}
   .rc-star{animation:none;opacity:1;transform:none}
-  .result-celebration{display:none}
+  .result-fireworks{display:none}
 }

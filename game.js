@@ -1060,8 +1060,8 @@
     persist();
   }
   /* ————————————— 成器庆祝 —————————————
-     成功弹窗的收尾：花瓣与光点从成品轮廓向外绽放、星级逐颗落下、朱印盖章。
-     1.6s 内走完并静止；prefers-reduced-motion 时只给最终帧。失败分支不调用这里。 */
+     成功弹窗的收尾：整屏礼花、星级逐颗落下、朱印盖章。
+     2.6s 内走完并静止；prefers-reduced-motion 时只给最终帧。失败分支不调用这里。 */
   function mountCelebration() {
     if (document.querySelector('link[data-result-celebration]')) return;
     const link = document.createElement('link');
@@ -1089,70 +1089,118 @@
       }
     }
     if (reduced) return;
-    const burst = document.createElement('div');
-    burst.className = 'result-celebration';
-    const cv = document.createElement('canvas'), W = 340, H = 316, dpr = Math.min(2, window.devicePixelRatio || 1);
-    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-    cv.setAttribute('aria-hidden', 'true');
-    burst.appendChild(cv); stage.appendChild(burst);
-    playBurst(cv.getContext('2d'), W, H, dpr, burst);
+    launchFireworks();
   }
-  /* 绽放：每片花瓣按编号错开一点起手，向外推到最大半径时淡出；
-     光点从底部缓缓浮起，收在一层很淡的金色外扩环里。 */
-  function playBurst(c, W, H, dpr, holder) {
+  /* 整屏礼花：五个爆点错开起爆 + 一层从上方飘落的散瓣。
+     画布挂在结果弹窗里 —— dialog 在 top layer，它的子节点天然盖住页面上的一切；
+     全视口、pointer-events:none，不挡按钮，2.6s 后自己把节点摘掉。 */
+  function launchFireworks() {
+    const host = $('result-dialog'); if (!host) return;
+    const old = host.querySelector('.result-fireworks'); if (old) old.remove();
+    const cv = document.createElement('canvas');
+    cv.className = 'result-fireworks';
+    cv.setAttribute('aria-hidden', 'true');
+    /* 不依赖样式表加载时机：定位直接写在行内，免得样式还没到就先在文档流里露一帧 */
+    cv.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;width:100vw;height:100vh;' +
+      'pointer-events:none;z-index:9;display:block';
+    host.appendChild(cv);
+    const W = Math.max(320, window.innerWidth), H = Math.max(320, window.innerHeight);
+    /* 满屏铺开，dpr 压到 1.5：4K 屏上也不至于每帧清一张 800 万像素的画布 */
+    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const c = cv.getContext('2d');
+    if (!c) { cv.remove(); return; }
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const colors = ['#DFD9BA', '#CBCFA6', '#A9843F', '#9D2B25', '#e6d9a5'];
-    const cx = W / 2, cy = H * .46, petals = [], motes = [], rings = [];
-    for (let i = 0; i < 30; i++) {
-      petals.push({
-        a: i / 30 * TAU + rnd(.2, -.2), r0: rnd(58, 40), r1: rnd(128, 92),
-        delay: (i % 6) * .035 + rnd(.08, 0), size: rnd(9.5, 5), spin: rnd(2.2, -2.2),
-        color: colors[i % colors.length], alpha: rnd(.92, .5)
+    const colors = ['#DFD9BA', '#CBCFA6', '#A9843F', '#9D2B25', '#e6d9a5', '#F2DFA8'];
+    const DUR = 3.0, R0 = Math.min(W, H);
+    /* 七个爆点从四角到上方依次点亮，半径按短边算，铺开到画面边缘 */
+    const spots = [
+      { x: W * .14, y: H * .22, t: 0,    n: 46, R: R0 * .52 },
+      { x: W * .86, y: H * .18, t: .12,  n: 44, R: R0 * .50 },
+      { x: W * .50, y: H * .07, t: .30,  n: 42, R: R0 * .58 },
+      { x: W * .09, y: H * .72, t: .48,  n: 38, R: R0 * .46 },
+      { x: W * .91, y: H * .70, t: .60,  n: 38, R: R0 * .46 },
+      { x: W * .30, y: H * .40, t: .86,  n: 34, R: R0 * .40 },
+      { x: W * .70, y: H * .44, t: 1.02, n: 34, R: R0 * .40 }
+    ];
+    const sparks = [], fall = [];
+    for (const s of spots) {
+      for (let i = 0; i < s.n; i++) {
+        const a = i / s.n * TAU + rnd(.16, -.16);
+        sparks.push({
+          x: s.x, y: s.y, t0: s.t, a, v: s.R * rnd(1.06, .58), g: rnd(96, 38),
+          size: rnd(12.5, 5), spin: rnd(1.05, -.55),
+          color: colors[(i * 2) % colors.length], life: rnd(1.75, 1.15),
+          dot: i % 3 === 0
+        });
+      }
+    }
+    for (let i = 0; i < 72; i++) {
+      fall.push({
+        x: rnd(W, 0), y: rnd(-H * .22, -H * .02), vy: rnd(138, 64), sway: rnd(28, 8),
+        ph: rnd(TAU, 0), size: rnd(9, 4), spin: rnd(3, -3),
+        color: colors[i % colors.length], t0: rnd(.9, 0), life: rnd(2.9, 2.1)
       });
     }
-    for (let i = 0; i < 46; i++) {
-      motes.push({ x: rnd(W * .92, W * .08), y: rnd(H * .95, H * .45), r: rnd(2.1, .7),
-        vy: rnd(30, 10), drift: rnd(14, -14), delay: rnd(.55, 0), color: colors[(i * 3) % colors.length] });
-    }
-    for (const d of [0, .1]) rings.push({ delay: d });
     bloomShimmer();
+    /* 第二声更轻的泛音，压在中段那两发上，别让声音只在开头响一下 */
+    if (save.sound && audioContext && audioContext.state === 'running') {
+      setTimeout(() => { if (cv.isConnected && audioContext.state === 'running') playTone([1174.66, 1567.98], 'sine', .026, .9, .1); }, 900);
+    }
     const t0 = performance.now();
     function frame(now) {
       const t = (now - t0) / 1000;
       c.clearRect(0, 0, W, H);
-      /* 外扩环：两道很淡的金线，把「开」的边界说出来 */
-      for (const ring of rings) {
-        const u = (t - ring.delay) / .8;
+      /* 起爆的白芯与金色外扩环：把「炸开」的瞬间说出来 */
+      for (const s of spots) {
+        const u = (t - s.t) / .62;
         if (u <= 0 || u >= 1) continue;
-        c.beginPath(); c.arc(cx, cy, 40 + u * 96, 0, TAU);
-        c.strokeStyle = `rgba(169,132,63,${(.3 * (1 - u)).toFixed(3)})`;
-        c.lineWidth = 1.4 * (1 - u) + .3; c.stroke();
+        c.beginPath(); c.arc(s.x, s.y, 6 + u * (s.R * .78), 0, TAU);
+        c.strokeStyle = 'rgba(169,132,63,' + (.34 * Math.pow(1 - u, 1.5)).toFixed(3) + ')';
+        c.lineWidth = 1.7 * (1 - u) + .3; c.stroke();
+        if (u < .22) {
+          c.beginPath(); c.arc(s.x, s.y, 26 * (1 - u / .22) + 3, 0, TAU);
+          c.fillStyle = 'rgba(255,247,222,' + (.5 * (1 - u / .22)).toFixed(3) + ')'; c.fill();
+        }
       }
-      for (const p of petals) {
-        const u = (t - p.delay) / .95;
+      /* 放射的花瓣与亮芯：初速向外，之后被一点重力往下拽 */
+      for (const p of sparks) {
+        const u = (t - p.t0) / p.life;
         if (u <= 0 || u >= 1) continue;
-        const e = 1 - Math.pow(1 - u, 2.4), r = p.r0 + (p.r1 - p.r0) * e;
-        const alpha = p.alpha * (u < .16 ? u / .16 : 1 - (u - .16) / .84);
-        const x = cx + Math.cos(p.a) * r, y = cy + Math.sin(p.a) * r * .92;
-        const size = p.size * (u < .3 ? .55 + u * 1.5 : 1);
-        c.save(); c.globalAlpha = Math.max(0, alpha);
+        const e = 1 - Math.pow(1 - u, 2.1), r = p.v * e;
+        const x = p.x + Math.cos(p.a) * r;
+        const y = p.y + Math.sin(p.a) * r * .9 + p.g * u * u;
+        const alpha = u < .12 ? u / .12 : 1 - (u - .12) / .88;
+        const size = p.size * (u < .25 ? .45 + u * 2.1 : 1);
+        c.save(); c.globalAlpha = Math.max(0, alpha * .95);
         c.translate(x, y); c.rotate(p.a + p.spin * u);
-        c.beginPath();
-        c.ellipse(0, 0, size * 1.45, size * .62, 0, 0, TAU);
-        c.fillStyle = p.color; c.fill();
+        if (p.dot) {
+          c.beginPath(); c.arc(0, 0, size * .4, 0, TAU);
+          c.fillStyle = p.color; c.fill();
+        } else {
+          /* 顺着飞行方向拉长的细长花瓣：初速那一下才像「炸开的礼花」，不是撒纸屑 */
+          c.beginPath(); c.ellipse(0, 0, size * 2.1, size * .5, 0, 0, TAU);
+          c.fillStyle = p.color; c.fill();
+        }
         c.restore();
       }
-      for (const m of motes) {
-        const u = (t - m.delay) / 1.05;
+      /* 从上方飘落的散瓣，补满上下两侧，让整块屏幕都在下花 */
+      for (const f of fall) {
+        const u = (t - f.t0) / f.life;
         if (u <= 0 || u >= 1) continue;
-        const alpha = Math.sin(Math.PI * u) * .82;
-        c.beginPath();
-        c.arc(m.x + m.drift * u, m.y - m.vy * u, m.r * (1 - u * .35), 0, TAU);
-        c.fillStyle = m.color; c.globalAlpha = alpha; c.fill();
+        const x = f.x + Math.sin(f.ph + u * 3.4) * f.sway;
+        const y = f.y + f.vy * u;
+        if (y > H + 20) continue;
+        const alpha = u < .1 ? u / .1 : (1 - u) * 1.6;
+        c.save(); c.globalAlpha = Math.max(0, Math.min(.9, alpha));
+        c.translate(x, y); c.rotate(f.ph + f.spin * u);
+        c.beginPath(); c.ellipse(0, 0, f.size * 1.35, f.size * .55, 0, 0, TAU);
+        c.fillStyle = f.color; c.fill(); c.restore();
       }
       c.globalAlpha = 1;
-      if (t < 1.62) requestAnimationFrame(frame);
-      else { c.clearRect(0, 0, W, H); holder.remove(); }
+      /* 弹窗被提前关掉或元素被清掉就收手，不要空转 */
+      if (t < DUR && cv.isConnected) requestAnimationFrame(frame);
+      else { c.clearRect(0, 0, W, H); cv.remove(); }
     }
     requestAnimationFrame(frame);
   }
