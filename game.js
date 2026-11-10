@@ -1112,13 +1112,15 @@
     if (!c) { cv.remove(); return; }
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     const colors = ['#DFD9BA', '#CBCFA6', '#A9843F', '#9D2B25', '#e6d9a5', '#F2DFA8', '#FBE7B8'];
-    const DUR = 2.4, R0 = Math.min(W, H), MID = H * .5;
+    const DUR = 1.5, R0 = Math.min(W, H);
+    /* 两股礼花要汇到的那一点：画面正中偏上一点，正好压在成品与标题之间 */
+    const CX = W * .5, CY = H * .46;
     const parts = [], flashes = [];
     let seq = 0;
     /* 一批粒子：x/y 起点、base 主方向、spread 张角、speed 初速（px/s） */
     function emit(x, y, base, spread, n, speed, o) {
       for (let i = 0; i < n; i++) {
-        const a = base + rnd(spread, -spread), v = speed * rnd(1.42, .58);
+        const a = base + rnd(spread, -spread), v = speed * rnd(1.4, .62);
         /* back：沿发射方向的反向随机退一点，喷口吐出的是一束有长度的礼花，不是一坨 */
         const back = o.back ? rnd(o.back, 0) : 0;
         parts.push({
@@ -1132,36 +1134,24 @@
         });
       }
     }
-    /* ① 左右各三条枪口，从画外朝中线对射；上下的枪口带一点朝中间的初速，形成漏斗式汇聚 */
-    for (const ly of [.26, .50, .74]) {
-      const pull = (MID - H * ly) * .55;
-      emit(-W * .04, H * ly, .02, .10, 26, W * .70, { t0: 0, life: [1.25, 1.0], size: [22, 10], g: 52, pull, spin: .55, back: W * .075 });
-      emit(W * 1.04, H * ly, Math.PI - .02, .10, 26, W * .70, { t0: 0, life: [1.25, 1.0], size: [22, 10], g: 52, pull, spin: .55, back: W * .075 });
-    }
-    /* ② 两股在中线撞上：先一圈金色冲击环，再从中心炸开一大蓬，一次铺到四角 */
-    flashes.push({ x: W * .5, y: MID, t: .56, R: R0 * 1.05 });
-    emit(W * .5, MID, 0, Math.PI, 200, R0 * .62, { t0: .52, life: [2.1, 1.72], size: [24, 10], g: 104, spin: 1.15 });
-    flashes.push({ x: W * .5, y: MID, t: 1.02, R: R0 * .62 });
-    emit(W * .5, MID, 0, Math.PI, 104, R0 * .58, { t0: 1.02, life: [1.32, .95], size: [20, 8], g: 104, spin: 1.2 });
-    /* ③ 余韵：中段再补两发小的，把对角线的空档填住 */
-    flashes.push({ x: W * .26, y: H * .28, t: .96, R: R0 * .52 });
-    emit(W * .26, H * .28, 0, Math.PI, 52, R0 * .66, { t0: .96, life: [1.2, .9], size: [16, 7], g: 108, spin: 1.3 });
-    flashes.push({ x: W * .74, y: H * .72, t: 1.08, R: R0 * .52 });
-    emit(W * .74, H * .72, 0, Math.PI, 52, R0 * .66, { t0: 1.08, life: [1.2, .9], size: [16, 7], g: 108, spin: 1.3 });
-    /* ④ 顶上一排慢慢落下的碎瓣，把最上沿也压住 */
-    flashes.push({ x: W * .5, y: MID, t: 1.42, R: R0 * .34 });
-    emit(W * .5, MID, 0, Math.PI, 64, R0 * .52, { t0: 1.42, life: [.95, .72], size: [18, 8], g: 96, spin: 1.3 });
-    for (let i = 0; i < 48; i++) {
-      parts.push({
-        x: rnd(W, 0), y: rnd(-H * .18, -H * .02), vx: rnd(30, -30), vy: rnd(160, 84), g: 10,
-        size: rnd(13, 6), spin: rnd(2.4, -2.4), t0: rnd(1.0, .3), life: rnd(1.7, 1.15),
-        color: colors[i % colors.length], dot: false
+    /* ① 只两门礼炮：左下角、右下角，各自斜着朝中间射。飞行时间约 0.43s */
+    for (const from of [{ x: -W * .03, y: H * 1.04 }, { x: W * 1.03, y: H * 1.04 }]) {
+      const ang = Math.atan2(CY - from.y, CX - from.x);
+      const dist = Math.hypot(CX - from.x, CY - from.y);
+      emit(from.x, from.y, ang, .115, 66, dist * 2.35, {
+        t0: 0, life: [.76, .62], size: [22, 10], g: 34, spin: .5, back: dist * .34
       });
     }
+    /* ② 两股在中线撞上：金色冲击环 + 从中心炸开，一次铺到四角 */
+    flashes.push({ x: CX, y: CY, t: .43, R: R0 * 1.05 });
+    emit(CX, CY, 0, Math.PI, 224, R0 * .94, { t0: .43, life: [1.04, .84], size: [24, 10], g: 118, spin: 1.1 });
+    /* ③ 收尾一小发，把最后 0.6 秒的空当填住 */
+    flashes.push({ x: CX, y: CY, t: .74, R: R0 * .52 });
+    emit(CX, CY, 0, Math.PI, 92, R0 * .58, { t0: .74, life: [.72, .58], size: [18, 8], g: 96, spin: 1.2 });
     bloomShimmer();
     /* 撞上中线那一下再补一声，别让声音只在开头响过 */
     if (save.sound && audioContext && audioContext.state === 'running') {
-      setTimeout(() => { if (cv.isConnected && audioContext.state === 'running') playTone([1174.66, 1567.98], 'sine', .028, .9, .1); }, 580);
+      setTimeout(() => { if (cv.isConnected && audioContext.state === 'running') playTone([1174.66, 1567.98], 'sine', .028, .8, .1); }, 430);
     }
     /* 弹窗那一块让一让：礼花照放，但落在正文上的花瓣压淡，字还能读。
        注意 showResult 是先 celebrate 后 showModal，所以尺寸要等第一帧再量。 */
@@ -1173,11 +1163,12 @@
       c.clearRect(0, 0, W, H);
       /* 撞击点的白芯与金色冲击环 */
       for (const f of flashes) {
-        const u = (t - f.t) / .56;
+        const u = (t - f.t) / .42;
         if (u <= 0 || u >= 1) continue;
+        /* 冲击环做得很淡：它是「撞上了」的暗示，不该被看成画了一个圈 */
         c.beginPath(); c.arc(f.x, f.y, 12 + u * f.R, 0, TAU);
-        c.strokeStyle = 'rgba(169,132,63,' + (.44 * Math.pow(1 - u, 1.6)).toFixed(3) + ')';
-        c.lineWidth = 2.4 * (1 - u) + .3; c.stroke();
+        c.strokeStyle = 'rgba(169,132,63,' + (.2 * Math.pow(1 - u, 2)).toFixed(3) + ')';
+        c.lineWidth = 1.5 * (1 - u) + .3; c.stroke();
         if (u < .3) {
           c.beginPath(); c.arc(f.x, f.y, 44 * (1 - u / .3) + 4, 0, TAU);
           c.fillStyle = 'rgba(255,247,222,' + (.62 * (1 - u / .3)).toFixed(3) + ')'; c.fill();
