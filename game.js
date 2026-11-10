@@ -1111,91 +1111,102 @@
     const c = cv.getContext('2d');
     if (!c) { cv.remove(); return; }
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const colors = ['#DFD9BA', '#CBCFA6', '#A9843F', '#9D2B25', '#e6d9a5', '#F2DFA8'];
-    const DUR = 3.0, R0 = Math.min(W, H);
-    /* 七个爆点从四角到上方依次点亮，半径按短边算，铺开到画面边缘 */
-    const spots = [
-      { x: W * .14, y: H * .22, t: 0,    n: 46, R: R0 * .52 },
-      { x: W * .86, y: H * .18, t: .12,  n: 44, R: R0 * .50 },
-      { x: W * .50, y: H * .07, t: .30,  n: 42, R: R0 * .58 },
-      { x: W * .09, y: H * .72, t: .48,  n: 38, R: R0 * .46 },
-      { x: W * .91, y: H * .70, t: .60,  n: 38, R: R0 * .46 },
-      { x: W * .30, y: H * .40, t: .86,  n: 34, R: R0 * .40 },
-      { x: W * .70, y: H * .44, t: 1.02, n: 34, R: R0 * .40 }
-    ];
-    const sparks = [], fall = [];
-    for (const s of spots) {
-      for (let i = 0; i < s.n; i++) {
-        const a = i / s.n * TAU + rnd(.16, -.16);
-        sparks.push({
-          x: s.x, y: s.y, t0: s.t, a, v: s.R * rnd(1.06, .58), g: rnd(96, 38),
-          size: rnd(12.5, 5), spin: rnd(1.05, -.55),
-          color: colors[(i * 2) % colors.length], life: rnd(1.75, 1.15),
-          dot: i % 3 === 0
+    const colors = ['#DFD9BA', '#CBCFA6', '#A9843F', '#9D2B25', '#e6d9a5', '#F2DFA8', '#FBE7B8'];
+    const DUR = 2.4, R0 = Math.min(W, H), MID = H * .5;
+    const parts = [], flashes = [];
+    let seq = 0;
+    /* 一批粒子：x/y 起点、base 主方向、spread 张角、speed 初速（px/s） */
+    function emit(x, y, base, spread, n, speed, o) {
+      for (let i = 0; i < n; i++) {
+        const a = base + rnd(spread, -spread), v = speed * rnd(1.42, .58);
+        /* back：沿发射方向的反向随机退一点，喷口吐出的是一束有长度的礼花，不是一坨 */
+        const back = o.back ? rnd(o.back, 0) : 0;
+        parts.push({
+          x: x - Math.cos(base) * back, y: y - Math.sin(base) * back,
+          vx: Math.cos(a) * v, vy: Math.sin(a) * v + (o.pull || 0),
+          g: o.g === undefined ? 80 : o.g,
+          size: rnd(o.size[1], o.size[0]),
+          spin: rnd(o.spin, -o.spin),
+          t0: o.t0, life: rnd(o.life[1], o.life[0]),
+          color: colors[(seq++ * 3) % colors.length], dot: seq % 5 === 0
         });
       }
     }
-    for (let i = 0; i < 72; i++) {
-      fall.push({
-        x: rnd(W, 0), y: rnd(-H * .22, -H * .02), vy: rnd(138, 64), sway: rnd(28, 8),
-        ph: rnd(TAU, 0), size: rnd(9, 4), spin: rnd(3, -3),
-        color: colors[i % colors.length], t0: rnd(.9, 0), life: rnd(2.9, 2.1)
+    /* ① 左右各三条枪口，从画外朝中线对射；上下的枪口带一点朝中间的初速，形成漏斗式汇聚 */
+    for (const ly of [.26, .50, .74]) {
+      const pull = (MID - H * ly) * .55;
+      emit(-W * .04, H * ly, .02, .10, 26, W * .70, { t0: 0, life: [1.25, 1.0], size: [22, 10], g: 52, pull, spin: .55, back: W * .075 });
+      emit(W * 1.04, H * ly, Math.PI - .02, .10, 26, W * .70, { t0: 0, life: [1.25, 1.0], size: [22, 10], g: 52, pull, spin: .55, back: W * .075 });
+    }
+    /* ② 两股在中线撞上：先一圈金色冲击环，再从中心炸开一大蓬，一次铺到四角 */
+    flashes.push({ x: W * .5, y: MID, t: .56, R: R0 * 1.05 });
+    emit(W * .5, MID, 0, Math.PI, 200, R0 * .62, { t0: .52, life: [2.1, 1.72], size: [24, 10], g: 104, spin: 1.15 });
+    flashes.push({ x: W * .5, y: MID, t: 1.02, R: R0 * .62 });
+    emit(W * .5, MID, 0, Math.PI, 104, R0 * .58, { t0: 1.02, life: [1.32, .95], size: [20, 8], g: 104, spin: 1.2 });
+    /* ③ 余韵：中段再补两发小的，把对角线的空档填住 */
+    flashes.push({ x: W * .26, y: H * .28, t: .96, R: R0 * .52 });
+    emit(W * .26, H * .28, 0, Math.PI, 52, R0 * .66, { t0: .96, life: [1.2, .9], size: [16, 7], g: 108, spin: 1.3 });
+    flashes.push({ x: W * .74, y: H * .72, t: 1.08, R: R0 * .52 });
+    emit(W * .74, H * .72, 0, Math.PI, 52, R0 * .66, { t0: 1.08, life: [1.2, .9], size: [16, 7], g: 108, spin: 1.3 });
+    /* ④ 顶上一排慢慢落下的碎瓣，把最上沿也压住 */
+    flashes.push({ x: W * .5, y: MID, t: 1.42, R: R0 * .34 });
+    emit(W * .5, MID, 0, Math.PI, 64, R0 * .52, { t0: 1.42, life: [.95, .72], size: [18, 8], g: 96, spin: 1.3 });
+    for (let i = 0; i < 48; i++) {
+      parts.push({
+        x: rnd(W, 0), y: rnd(-H * .18, -H * .02), vx: rnd(30, -30), vy: rnd(160, 84), g: 10,
+        size: rnd(13, 6), spin: rnd(2.4, -2.4), t0: rnd(1.0, .3), life: rnd(1.7, 1.15),
+        color: colors[i % colors.length], dot: false
       });
     }
     bloomShimmer();
-    /* 第二声更轻的泛音，压在中段那两发上，别让声音只在开头响一下 */
+    /* 撞上中线那一下再补一声，别让声音只在开头响过 */
     if (save.sound && audioContext && audioContext.state === 'running') {
-      setTimeout(() => { if (cv.isConnected && audioContext.state === 'running') playTone([1174.66, 1567.98], 'sine', .026, .9, .1); }, 900);
+      setTimeout(() => { if (cv.isConnected && audioContext.state === 'running') playTone([1174.66, 1567.98], 'sine', .028, .9, .1); }, 580);
     }
+    /* 弹窗那一块让一让：礼花照放，但落在正文上的花瓣压淡，字还能读。
+       注意 showResult 是先 celebrate 后 showModal，所以尺寸要等第一帧再量。 */
+    let box = null;
     const t0 = performance.now();
     function frame(now) {
       const t = (now - t0) / 1000;
+      if (!box) box = host.getBoundingClientRect();
       c.clearRect(0, 0, W, H);
-      /* 起爆的白芯与金色外扩环：把「炸开」的瞬间说出来 */
-      for (const s of spots) {
-        const u = (t - s.t) / .62;
+      /* 撞击点的白芯与金色冲击环 */
+      for (const f of flashes) {
+        const u = (t - f.t) / .56;
         if (u <= 0 || u >= 1) continue;
-        c.beginPath(); c.arc(s.x, s.y, 6 + u * (s.R * .78), 0, TAU);
-        c.strokeStyle = 'rgba(169,132,63,' + (.34 * Math.pow(1 - u, 1.5)).toFixed(3) + ')';
-        c.lineWidth = 1.7 * (1 - u) + .3; c.stroke();
-        if (u < .22) {
-          c.beginPath(); c.arc(s.x, s.y, 26 * (1 - u / .22) + 3, 0, TAU);
-          c.fillStyle = 'rgba(255,247,222,' + (.5 * (1 - u / .22)).toFixed(3) + ')'; c.fill();
+        c.beginPath(); c.arc(f.x, f.y, 12 + u * f.R, 0, TAU);
+        c.strokeStyle = 'rgba(169,132,63,' + (.44 * Math.pow(1 - u, 1.6)).toFixed(3) + ')';
+        c.lineWidth = 2.4 * (1 - u) + .3; c.stroke();
+        if (u < .3) {
+          c.beginPath(); c.arc(f.x, f.y, 44 * (1 - u / .3) + 4, 0, TAU);
+          c.fillStyle = 'rgba(255,247,222,' + (.62 * (1 - u / .3)).toFixed(3) + ')'; c.fill();
         }
       }
-      /* 放射的花瓣与亮芯：初速向外，之后被一点重力往下拽 */
-      for (const p of sparks) {
-        const u = (t - p.t0) / p.life;
-        if (u <= 0 || u >= 1) continue;
-        const e = 1 - Math.pow(1 - u, 2.1), r = p.v * e;
-        const x = p.x + Math.cos(p.a) * r;
-        const y = p.y + Math.sin(p.a) * r * .9 + p.g * u * u;
-        const alpha = u < .12 ? u / .12 : 1 - (u - .12) / .88;
-        const size = p.size * (u < .25 ? .45 + u * 2.1 : 1);
-        c.save(); c.globalAlpha = Math.max(0, alpha * .95);
-        c.translate(x, y); c.rotate(p.a + p.spin * u);
+      /* 花瓣：沿飞行方向拉成长条，落下时被一点重力带出弧线 */
+      for (const p of parts) {
+        const dt = t - p.t0;
+        if (dt <= 0 || dt >= p.life) continue;
+        const u = dt / p.life;
+        /* 阻力：越飞越慢，花瓣停得住，不会一秒就飞出画外 */
+        const damp = 1 - .42 * u;
+        const x = p.x + p.vx * dt * damp;
+        const y = p.y + p.vy * dt * damp + .5 * p.g * dt * dt;
+        if (x < -80 || x > W + 80 || y < -80 || y > H + 80) continue;
+        let alpha = u < .07 ? u / .07 : 1 - (u - .07) / .93;
+        if (x > box.left && x < box.right && y > box.top && y < box.bottom) alpha *= .42;
+        const grow = u < .18 ? .35 + u * 3.4 : 1;
+        const size = p.size * grow;
+        c.save(); c.globalAlpha = Math.max(0, alpha * .96);
+        c.translate(x, y);
+        c.rotate(Math.atan2(p.vy + p.g * dt, p.vx) + p.spin * u);
         if (p.dot) {
-          c.beginPath(); c.arc(0, 0, size * .4, 0, TAU);
-          c.fillStyle = p.color; c.fill();
+          c.beginPath(); c.arc(0, 0, size * .34, 0, TAU);
         } else {
-          /* 顺着飞行方向拉长的细长花瓣：初速那一下才像「炸开的礼花」，不是撒纸屑 */
-          c.beginPath(); c.ellipse(0, 0, size * 2.1, size * .5, 0, 0, TAU);
-          c.fillStyle = p.color; c.fill();
+          c.beginPath(); c.ellipse(0, 0, size * 2.2, size * .48, 0, 0, TAU);
         }
+        c.fillStyle = p.color; c.fill();
         c.restore();
-      }
-      /* 从上方飘落的散瓣，补满上下两侧，让整块屏幕都在下花 */
-      for (const f of fall) {
-        const u = (t - f.t0) / f.life;
-        if (u <= 0 || u >= 1) continue;
-        const x = f.x + Math.sin(f.ph + u * 3.4) * f.sway;
-        const y = f.y + f.vy * u;
-        if (y > H + 20) continue;
-        const alpha = u < .1 ? u / .1 : (1 - u) * 1.6;
-        c.save(); c.globalAlpha = Math.max(0, Math.min(.9, alpha));
-        c.translate(x, y); c.rotate(f.ph + f.spin * u);
-        c.beginPath(); c.ellipse(0, 0, f.size * 1.35, f.size * .55, 0, 0, TAU);
-        c.fillStyle = f.color; c.fill(); c.restore();
       }
       c.globalAlpha = 1;
       /* 弹窗被提前关掉或元素被清掉就收手，不要空转 */
